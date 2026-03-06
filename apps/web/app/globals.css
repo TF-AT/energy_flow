@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0a0a0c;
+  --color-card-bg: #121216;
+  --color-card-border: #1e1e24;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-critical: #ef4444;
+  --color-info: #3b82f6;
+  
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+@utility metric-value {
+  @apply text-5xl font-black tracking-tighter leading-none;
+}
+
+@utility metric-label {
+  @apply text-[10px] font-black uppercase tracking-[0.2em] text-text-muted mb-2;
+}
+
+@utility status-dot {
+  @apply h-2 w-2 rounded-full;
+}
+
+@utility pro-card {
+  @apply bg-[#121216] border border-[#1e1e24] shadow-xl rounded-xl transition-all duration-300;
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #1e1e24;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #3b82f6;
+  }
+
+  /* Recharts custom hacks */
+  .recharts-cartesian-grid-horizontal line,
+  .recharts-cartesian-grid-vertical line {
+    stroke: #1e1e24;
+    stroke-opacity: 0.5;
+  }
+  
+  .recharts-default-tooltip {
+    background-color: #121216 !important;
+    border: 1px solid #1e1e24 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+  }
+}

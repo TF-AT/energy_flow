@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Microgrid {
+  id           String        @id @default(uuid())
+  name         String
+  location     String
+  capacity_kw  Float
+  createdAt    DateTime      @default(now())
+  transformers Transformer[]
+}
+
+model Transformer {
+  id          String    @id @default(uuid())
+  location    String
+  capacity_kw Float
+  microgridId String
+  createdAt   DateTime  @default(now())
+  alerts      Alert[]
+  devices     Device[]
+  microgrid   Microgrid @relation(fields: [microgridId], references: [id])
+}
+
+model Device {
+  id            String          @id @default(uuid())
+  type          String
+  transformerId String
+  createdAt     DateTime        @default(now())
+  transformer   Transformer     @relation(fields: [transformerId], references: [id])
+  readings      EnergyReading[]
+}
+
+model EnergyReading {
+  id        String   @id @default(uuid())
+  deviceId  String
+  voltage   Float
+  current   Float
+  frequency Float
+  timestamp DateTime
+  createdAt DateTime @default(now())
+  device    Device   @relation(fields: [deviceId], references: [id])
+}
+
+model Alert {
+  id            String      @id @default(uuid())
+  transformerId String
+  type          String
+  message       String
+  isResolved    Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  transformer   Transformer @relation(fields: [transformerId], references: [id])
+}
