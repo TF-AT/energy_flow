@@ -3,8 +3,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { errorHandler } from "./middleware/error.middleware";
 import { validateBody } from "./middleware/validate.middleware";
-import * as microgridController from "./controllers/microgrid.controller";
 import * as readingController from "./controllers/reading.controller";
+import * as eventsController from "./controllers/events.controller";
+import * as microgridController from "./controllers/microgrid.controller";
 
 dotenv.config();
 
@@ -16,6 +17,9 @@ app.use(express.json());
 
 // Health Check
 app.get("/health", (req, res) => res.json({ status: "ok" }));
+
+// Real-time Events
+app.get("/events", eventsController.streamEvents);
 
 // Microgrid Routes
 app.get("/microgrids", microgridController.getMicrogrids);
