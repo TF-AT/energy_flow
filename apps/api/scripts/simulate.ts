@@ -1,6 +1,9 @@
 import axios from "axios";
+import dotenv from "dotenv";
 
-const API_URL = "http://localhost:3001";
+dotenv.config();
+
+const API_URL = process.env.API_URL || "http://localhost:3001";
 const DEVICE_COUNT = 50;
 const SEND_INTERVAL_MS = 10000;
 const DEFAULT_TRANSFORMER_ID = "tr-broad-01";
