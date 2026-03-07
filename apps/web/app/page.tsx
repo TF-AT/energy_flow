@@ -12,7 +12,8 @@ import { DashboardData } from "../lib/types";
 import { usePolling } from "../lib/hooks";
 import { Activity, ShieldCheck, ShieldAlert, Shield } from "lucide-react";
 
-import { calculateGridStatus } from "../lib/status-utils";
+import HealthScore from "../components/HealthScore";
+import { calculateGridStatus, calculateHealthScore } from "../lib/status-utils";
 import { useGridStatus } from "../context/GridStatusContext";
 
 export default function DashboardPage() {
@@ -74,11 +75,13 @@ export default function DashboardPage() {
   const isCritical = data.activeAlertsCount > 0 || (voltage > 260 || (voltage > 0 && voltage < 185));
   const isWarning = !isCritical && (data.recentAlerts.length > 0 || (voltage > 240 || (voltage > 0 && voltage < 195)));
 
+  const healthScore = calculateHealthScore(data.recentAlerts, data.recentReadings);
+
   return (
     <Layout>
       <div className="max-w-[1700px] mx-auto space-y-4 pb-20">
         {/* MASTER STATUS HEADER - The "3-Second Rule" Element */}
-        <div className={`flex flex-col md:flex-row justify-between items-center px-10 py-8 rounded-2xl border-2 transition-colors duration-500 ${
+        <div className={`flex flex-col lg:flex-row justify-between items-center px-10 py-8 rounded-2xl border-2 transition-colors duration-500 ${
           isCritical 
             ? 'bg-critical/[0.03] border-critical/30' 
             : isWarning 
@@ -105,14 +108,17 @@ export default function DashboardPage() {
             </div>
           </div>
           
-          <div className="text-right mt-6 md:mt-0 flex flex-col items-end gap-2">
-             <div className="flex items-center gap-3 bg-card-bg border border-card-border px-4 py-2 rounded-xl">
-                <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">Response Ready</span>
-                <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
+          <div className="flex flex-col sm:flex-row items-center gap-6 mt-6 lg:mt-0">
+             <HealthScore score={healthScore} />
+             <div className="text-right flex flex-col items-end gap-2">
+                <div className="flex items-center gap-3 bg-card-bg border border-card-border px-4 py-2 rounded-xl">
+                   <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">Response Ready</span>
+                   <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                </div>
+                <p className="font-mono text-[11px] font-black text-text-muted uppercase tracking-widest">
+                  Sync: {new Date().toLocaleTimeString([], { hour12: false })} • {data.transformersCount} Assets Active
+                </p>
              </div>
-             <p className="font-mono text-[11px] font-black text-text-muted uppercase tracking-widest">
-               Sync: {new Date().toLocaleTimeString([], { hour12: false })} • {data.transformersCount} Assets Active
-             </p>
           </div>
         </div>
 
