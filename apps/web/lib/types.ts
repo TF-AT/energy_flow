@@ -38,9 +38,9 @@ export interface Alert {
   transformerId: string;
   type: string;
   message: string;
-  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  severity: string;
   isResolved: boolean;
-  createdAt: string | Date;
+  createdAt: string;
   transformer?: Transformer;
 }
 
@@ -48,5 +48,6 @@ export interface DashboardData {
   transformersCount: number;
   activeAlertsCount: number;
   recentAlerts: Alert[];
+  recentEvents: Alert[];
   recentReadings: EnergyReading[];
 }

@@ -54,7 +54,7 @@ export const getDashboardData = async (req: Request, res: Response, next: NextFu
   }
 
   try {
-    const [transformersCount, activeAlerts, recentReadings] = await Promise.all([
+    const [transformersCount, activeAlerts, recentReadings, recentEvents] = await Promise.all([
       prisma.transformer.count(),
       prisma.alert.findMany({
         where: { isResolved: false },
@@ -65,6 +65,11 @@ export const getDashboardData = async (req: Request, res: Response, next: NextFu
       prisma.energyReading.findMany({
         take: 2000,
         orderBy: { timestamp: "desc" },
+      }),
+      prisma.alert.findMany({
+        take: 20,
+        orderBy: { createdAt: "desc" },
+        include: { transformer: true }
       })
     ]);
 
@@ -73,6 +78,7 @@ export const getDashboardData = async (req: Request, res: Response, next: NextFu
       activeAlertsCount: activeAlerts.length,
       recentAlerts: activeAlerts,
       recentReadings,
+      recentEvents,
     };
 
     // Update cache

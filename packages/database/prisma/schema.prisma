@@ -56,6 +56,7 @@ model Alert {
   transformerId String
   type          String
   message       String
+  severity      String      @default("WARNING")
   isResolved    Boolean     @default(false)
   createdAt     DateTime    @default(now())
   transformer   Transformer @relation(fields: [transformerId], references: [id])

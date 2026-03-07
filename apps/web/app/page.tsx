@@ -7,6 +7,7 @@ import AlertTable from "../components/AlertTable";
 import AlertBanner from "../components/AlertBanner";
 import VoltageChart from "../charts/VoltageChart";
 import TimeRangeSelector, { TimeRange } from "../components/TimeRangeSelector";
+import EventTimeline from "../components/EventTimeline";
 import { api } from "../lib/api";
 import { DashboardData } from "../lib/types";
 import { usePolling } from "../lib/hooks";
@@ -140,9 +141,9 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* MIDDLE: Diagnostic Trends */}
-        <div className="grid grid-cols-1 gap-6">
-           <div className="space-y-4">
+        {/* MIDDLE: Diagnostic Trends & Timeline */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+           <div className="xl:col-span-2 space-y-4">
               <div className="flex justify-between items-end px-2">
                  <div>
                     <h2 className="text-xl font-black text-white uppercase tracking-tighter">Real-time Oscilloscope</h2>
@@ -153,16 +154,20 @@ export default function DashboardPage() {
               <VoltageChart 
                 data={data.recentReadings.filter(r => {
                   const readingTime = new Date(r.timestamp).getTime();
-                  const now = new Date().getTime();
+                  const now = Date.now();
                   return now - readingTime <= selectedRange * 60 * 1000;
                 })} 
-                height={420} 
+                height={500} 
               />
+           </div>
+           
+           <div className="xl:col-span-1 h-[610px]">
+              <EventTimeline events={data.recentEvents} />
            </div>
         </div>
 
         {/* BOTTOM: Event Log */}
-        <div className="pt-2 mt-10 text-right">
+        <div className="pt-2 mt-10">
            <AlertTable alerts={data.recentAlerts} />
         </div>
       </div>

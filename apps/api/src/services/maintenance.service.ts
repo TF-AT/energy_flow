@@ -56,6 +56,7 @@ export class MaintenanceService {
               transformerId,
               type: "COMMUNICATION_LOST",
               message: `COMMUNICATION LOST: Sensors at ${device?.transformer.location || 'Unknown'} have stopped reporting.`,
+              severity: "CRITICAL",
             },
           });
           console.log(`[MaintenanceService] Created COMMUNICATION_LOST alert for transformer: ${transformerId}`);

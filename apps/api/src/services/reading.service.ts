@@ -74,15 +74,15 @@ export class ReadingService {
     const normalTypes = [];
 
     if (voltage > 250) {
-      alertsToCreate.push({ type: "OverVoltage", message: `Critical OverVoltage: ${voltage}V detected on device ${deviceId}` });
+      alertsToCreate.push({ type: "OverVoltage", message: `Critical OverVoltage: ${voltage}V detected on device ${deviceId}`, severity: "CRITICAL" });
     } else if (voltage < 180) {
-      alertsToCreate.push({ type: "UnderVoltage", message: `Critical UnderVoltage: ${voltage}V detected on device ${deviceId}` });
+      alertsToCreate.push({ type: "UnderVoltage", message: `Critical UnderVoltage: ${voltage}V detected on device ${deviceId}`, severity: "WARNING" });
     } else {
       normalTypes.push("OverVoltage", "UnderVoltage");
     }
 
     if (frequency > 51 || frequency < 49) {
-      alertsToCreate.push({ type: "GridInstability", message: `Frequency anomaly: ${frequency}Hz detected on device ${deviceId}` });
+      alertsToCreate.push({ type: "GridInstability", message: `Frequency anomaly: ${frequency}Hz detected on device ${deviceId}`, severity: "CRITICAL" });
     } else {
       normalTypes.push("GridInstability");
     }
@@ -103,6 +103,7 @@ export class ReadingService {
             transformerId: device.transformerId,
             type: alertData.type,
             message: alertData.message,
+            severity: alertData.severity, // Add severity here
           },
         });
 
