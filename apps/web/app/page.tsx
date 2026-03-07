@@ -6,6 +6,7 @@ import DashboardStats from "../components/DashboardStats";
 import AlertTable from "../components/AlertTable";
 import AlertBanner from "../components/AlertBanner";
 import VoltageChart from "../charts/VoltageChart";
+import TimeRangeSelector, { TimeRange } from "../components/TimeRangeSelector";
 import { api } from "../lib/api";
 import { DashboardData } from "../lib/types";
 import { usePolling } from "../lib/hooks";
@@ -18,6 +19,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [prevData, setPrevData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedRange, setSelectedRange] = useState<TimeRange>(5);
   const { setStatus } = useGridStatus();
 
   const refreshData = async () => {
@@ -134,11 +136,27 @@ export default function DashboardPage() {
 
         {/* MIDDLE: Diagnostic Trends */}
         <div className="grid grid-cols-1 gap-6">
-           <VoltageChart data={data.recentReadings} height={420} />
+           <div className="space-y-4">
+              <div className="flex justify-between items-end px-2">
+                 <div>
+                    <h2 className="text-xl font-black text-white uppercase tracking-tighter">Real-time Oscilloscope</h2>
+                    <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest mt-1">LGS-North Phase A/B/C Monitoring</p>
+                 </div>
+                 <TimeRangeSelector selectedRange={selectedRange} onRangeChange={setSelectedRange} />
+              </div>
+              <VoltageChart 
+                data={data.recentReadings.filter(r => {
+                  const readingTime = new Date(r.timestamp).getTime();
+                  const now = new Date().getTime();
+                  return now - readingTime <= selectedRange * 60 * 1000;
+                })} 
+                height={420} 
+              />
+           </div>
         </div>
 
         {/* BOTTOM: Event Log */}
-        <div className="pt-2">
+        <div className="pt-2 mt-10 text-right">
            <AlertTable alerts={data.recentAlerts} />
         </div>
       </div>

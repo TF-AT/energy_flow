@@ -63,7 +63,7 @@ export const getDashboardData = async (req: Request, res: Response, next: NextFu
         include: { transformer: true }
       }),
       prisma.energyReading.findMany({
-        take: 50,
+        take: 2000,
         orderBy: { timestamp: "desc" },
       })
     ]);

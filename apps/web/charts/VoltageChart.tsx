@@ -87,8 +87,8 @@ export default function VoltageChart({ data, title = "Phase Voltage Diagnostics"
               strokeWidth={2} 
               fillOpacity={1} 
               fill="url(#voltageGradient)"
-              animationDuration={0}
-              isAnimationActive={false}
+              isAnimationActive={true}
+              animationDuration={500}
             />
           </AreaChart>
         </ResponsiveContainer>
