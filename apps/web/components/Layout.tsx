@@ -2,7 +2,25 @@ import React from "react";
 import Link from "next/link";
 import { LayoutDashboard, Server, AlertTriangle, Settings, LogOut } from "lucide-react";
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+import { useGridStatus } from "../context/GridStatusContext";
+
+export type GridStatus = "nominal" | "warning" | "critical";
+
+export default function Layout({ 
+  children
+}: { 
+  children: React.ReactNode;
+}) {
+  const { status } = useGridStatus();
+  
+  const statusConfig = {
+    nominal: { color: "text-emerald-400", label: "NOMINAL" },
+    warning: { color: "text-warning", label: "WARNING" },
+    critical: { color: "text-critical", label: "CRITICAL" },
+  };
+
+  const { color, label } = statusConfig[status];
+
   return (
     <div className="flex min-h-screen bg-[#0a0a0b] text-[#f8fafc]">
       {/* Sidebar */}
@@ -33,7 +51,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <main className="flex-grow overflow-y-auto">
         <header className="h-16 border-b border-[#2d2d33] bg-[#0a0a0b]/80 backdrop-blur-md sticky top-0 z-10 flex items-center justify-between px-8">
           <div className="text-sm font-bold text-[#64748b]">
-            <span className="text-emerald-400 mr-2">●</span> GRID STATUS: NOMINAL
+            <span className={`${color} mr-2 transition-colors duration-500`}>●</span> 
+            GRID STATUS: <span className={`${color} transition-colors duration-500`}>{label}</span>
           </div>
           <div className="flex items-center gap-4">
             <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 border border-[#2d2d33]" />

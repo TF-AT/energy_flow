@@ -10,16 +10,27 @@ import { DashboardData } from "../lib/types";
 import { usePolling } from "../lib/hooks";
 import { Activity, ShieldCheck, ShieldAlert, Shield } from "lucide-react";
 
+import { calculateGridStatus } from "../lib/status-utils";
+import { useGridStatus } from "../context/GridStatusContext";
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [prevData, setPrevData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { setStatus } = useGridStatus();
 
   const refreshData = async () => {
     try {
       const result = await api.getDashboardData();
       setPrevData(data);
       setData(result);
+      
+      const newStatus = calculateGridStatus(
+        result.activeAlertsCount,
+        result.recentReadings,
+        result.recentAlerts
+      );
+      setStatus(newStatus);
     } catch (error) {
       console.error("Dashboard refresh failed:", error);
     } finally {

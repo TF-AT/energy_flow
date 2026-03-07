@@ -38,14 +38,15 @@ model Device {
 }
 
 model EnergyReading {
-  id        String   @id @default(uuid())
-  deviceId  String
-  voltage   Float
-  current   Float
-  frequency Float
-  timestamp DateTime
-  createdAt DateTime @default(now())
-  device    Device   @relation(fields: [deviceId], references: [id])
+  id             String   @id @default(uuid())
+  deviceId       String
+  voltage        Float
+  current        Float
+  frequency      Float
+  timestamp      DateTime
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
+  device         Device   @relation(fields: [deviceId], references: [id])
 }
 
 model Alert {

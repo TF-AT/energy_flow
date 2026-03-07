@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   description: "Real-time monitoring for Nigerian energy grid infrastructure",
 };
 
+import { GridStatusProvider } from "../context/GridStatusContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -24,7 +26,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <GridStatusProvider>
+          {children}
+        </GridStatusProvider>
+      </body>
     </html>
   );
 }

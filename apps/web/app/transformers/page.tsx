@@ -8,14 +8,23 @@ import { Transformer } from "../../lib/types";
 import { usePolling } from "../../lib/hooks";
 import { Server, Search } from "lucide-react";
 
+import { useGridStatus } from "../../context/GridStatusContext";
+
 export default function TransformersPage() {
   const [transformers, setTransformers] = useState<Transformer[]>([]);
   const [loading, setLoading] = useState(true);
+  const { setStatus } = useGridStatus();
 
   const fetchData = async () => {
     try {
       const data = await api.getTransformers();
       setTransformers(data);
+      
+      // Calculate status based on any active alerts in transformers
+      const hasCriticalAlert = data.some(t => t.alerts && t.alerts.some(a => a.severity === 'CRITICAL'));
+      const hasAnyAlert = data.some(t => (t.alerts?.length ?? 0) > 0);
+      
+      setStatus(hasCriticalAlert ? 'critical' : hasAnyAlert ? 'warning' : 'nominal');
     } catch (error) {
       console.error("Failed to fetch transformers:", error);
     } finally {
