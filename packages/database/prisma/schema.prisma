@@ -31,6 +31,8 @@ model Transformer {
 model Device {
   id            String          @id @default(uuid())
   type          String
+  status        String          @default("online")
+  lastSeen      DateTime        @default(now())
   transformerId String
   createdAt     DateTime        @default(now())
   transformer   Transformer     @relation(fields: [transformerId], references: [id])

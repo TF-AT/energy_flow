@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import DashboardStats from "../components/DashboardStats";
 import AlertTable from "../components/AlertTable";
+import AlertBanner from "../components/AlertBanner";
 import VoltageChart from "../charts/VoltageChart";
 import { api } from "../lib/api";
 import { DashboardData } from "../lib/types";
@@ -112,6 +113,12 @@ export default function DashboardPage() {
              </p>
           </div>
         </div>
+
+        {/* ALERT STATUS BANNER */}
+        <AlertBanner 
+          latestAlert={data.recentAlerts[0] || null} 
+          activeAlertsCount={data.activeAlertsCount} 
+        />
 
         {/* TOP: Critical Indicators */}
         <div className="pt-2">

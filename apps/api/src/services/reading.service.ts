@@ -36,17 +36,35 @@ export class ReadingService {
       throw new Error(`Device ${deviceId} not found`);
     }
 
-    // 2. Persist Reading
-    const reading = await prisma.energyReading.create({
-      data: {
-        deviceId,
-        voltage,
-        current,
-        frequency,
-        timestamp,
-        idempotencyKey,
-      },
-    });
+    // 2. Persist Reading and Update Device State
+    const [reading] = await Promise.all([
+      prisma.energyReading.create({
+        data: {
+          deviceId,
+          voltage,
+          current,
+          frequency,
+          timestamp,
+          idempotencyKey,
+        },
+      }),
+      prisma.device.update({
+        where: { id: deviceId },
+        data: {
+          lastSeen: new Date(),
+          status: "online",
+        },
+      }),
+      // Resolve any communication lost alerts for this transformer
+      prisma.alert.updateMany({
+        where: {
+          transformerId: device.transformerId,
+          type: "COMMUNICATION_LOST",
+          isResolved: false,
+        },
+        data: { isResolved: true },
+      }),
+    ]);
 
     // Notify SSE
     eventEmitter.emit("reading", reading);

@@ -18,6 +18,8 @@ export interface Transformer {
 export interface Device {
   id: string;
   type: string;
+  status: "online" | "offline";
+  lastSeen: string | Date;
   transformerId: string;
   readings?: EnergyReading[];
 }

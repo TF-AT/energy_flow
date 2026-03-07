@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { MaintenanceService } from "./services/maintenance.service";
 import { errorHandler } from "./middleware/error.middleware";
 import { validateBody } from "./middleware/validate.middleware";
 import * as readingController from "./controllers/reading.controller";
@@ -46,4 +47,9 @@ app.use(errorHandler);
 
 app.listen(port, () => {
   console.log(`API server listening on port ${port}`);
+  
+  // Start background maintenance tasks
+  setInterval(() => {
+    MaintenanceService.checkDeviceHealth();
+  }, 15000); // Check every 15 seconds
 });
