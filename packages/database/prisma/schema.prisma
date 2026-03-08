@@ -61,3 +61,13 @@ model Alert {
   createdAt     DateTime    @default(now())
   transformer   Transformer @relation(fields: [transformerId], references: [id])
 }
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  role      String   @default("OPERATOR")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

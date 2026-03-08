@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { LayoutDashboard, Server, AlertTriangle, Settings, LogOut } from "lucide-react";
+import Cookies from "js-cookie";
 
 import { useGridStatus } from "../context/GridStatusContext";
 
@@ -20,6 +21,11 @@ export default function Layout({
   };
 
   const { color, label } = statusConfig[status];
+
+  const handleLogout = () => {
+    Cookies.remove("auth_token");
+    window.location.href = "/login";
+  };
 
   return (
     <div className="flex min-h-screen bg-[#0a0a0b] text-[#f8fafc]">
