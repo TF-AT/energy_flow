@@ -8,8 +8,9 @@ import AlertTable from "../../../components/AlertTable";
 import { api } from "../../../lib/api";
 import { Transformer, EnergyReading } from "../../../lib/types";
 import { usePolling } from "../../../lib/hooks";
-import { Server, Activity, ArrowLeft } from "lucide-react";
+import { Server, Activity, ArrowLeft, Home } from "lucide-react";
 import Link from "next/link";
+import Breadcrumbs from "../../../components/Breadcrumbs";
 
 export default function TransformerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -57,6 +58,12 @@ export default function TransformerDetailPage({ params }: { params: Promise<{ id
   return (
     <Layout>
       <div className="max-w-[1400px] mx-auto">
+        <Breadcrumbs 
+          items={[
+            { label: "Transformers", href: "/transformers" },
+            { label: transformer.id }
+          ]} 
+        />
         <div className="mb-8">
           <Link href="/transformers" className="inline-flex items-center gap-2 text-sm font-bold text-[#64748b] hover:text-blue-400 transition-colors mb-4 group">
             <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
