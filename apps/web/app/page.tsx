@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Layout from "../components/Layout";
 import DashboardStats from "../components/DashboardStats";
 import AlertTable from "../components/AlertTable";
@@ -152,11 +152,11 @@ export default function DashboardPage() {
                  <TimeRangeSelector selectedRange={selectedRange} onRangeChange={setSelectedRange} />
               </div>
               <VoltageChart 
-                data={data.recentReadings.filter(r => {
+                data={useMemo(() => data.recentReadings.filter(r => {
                   const readingTime = new Date(r.timestamp).getTime();
                   const now = Date.now();
                   return now - readingTime <= selectedRange * 60 * 1000;
-                })} 
+                }), [data.recentReadings, selectedRange])} 
                 height={500} 
               />
            </div>

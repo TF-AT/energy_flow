@@ -3,64 +3,37 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { MaintenanceService } from "./services/maintenance.service";
 import { errorHandler } from "./middleware/error.middleware";
-import { validateBody } from "./middleware/validate.middleware";
-import * as readingController from "./controllers/reading.controller";
 import * as eventsController from "./controllers/events.controller";
-import * as microgridController from "./controllers/microgrid.controller";
-import * as authController from "./controllers/auth.controller";
-import { verifyToken } from "./middleware/auth.middleware";
+import apiRouter from "./routes";
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
 
+// --- Middlewares ---
 app.use(cors());
 app.use(express.json());
 
-// Health Check
-app.get("/health", (req, res) => res.json({ status: "ok" }));
+// --- Routes ---
 
-// Auth Routes
-app.post("/api/auth/login", authController.login);
-
-// Real-time Events
+// 1. Mission-Critical / System Endpoints (No Prefix)
+app.get("/health", (req, res) => res.json({ status: "ok", timestamp: new Date() }));
 app.get("/events", eventsController.streamEvents);
 
-// Protected Microgrid Routes
-app.use("/microgrids", verifyToken);
-app.get("/microgrids", microgridController.getMicrogrids);
+// 2. Centralized API Router (Mounts everything under /api)
+app.use("/api", apiRouter);
 
-app.use("/transformers", verifyToken);
-app.get("/transformers", microgridController.getTransformers);
-
-app.use("/alerts", verifyToken);
-app.get("/alerts", microgridController.getAlerts);
-
-app.get("/api/dashboard", verifyToken, microgridController.getDashboardData);
-app.get("/readings", verifyToken, readingController.getReadings);
-
-// Device & Reading Routes
-app.post(
-  "/devices/register",
-  validateBody(["id", "type", "transformerId"]),
-  readingController.registerDevice
-);
-
-app.post(
-  "/readings",
-  validateBody(["deviceId", "voltage", "current", "frequency", "timestamp"]),
-  readingController.createReading
-);
-
-// Global Error Handler
+// --- Bootstrapping & Services ---
 app.use(errorHandler);
 
+const startServices = () => {
+    console.log("[App] Initializing background services...");
+    // Dead-man switch check
+    setInterval(() => MaintenanceService.checkDeviceHealth(), 15000);
+};
+
 app.listen(port, () => {
-  console.log(`API server listening on port ${port}`);
-  
-  // Start background maintenance tasks
-  setInterval(() => {
-    MaintenanceService.checkDeviceHealth();
-  }, 15000); // Check every 15 seconds
+  console.log(`[HTTP] Microgrid API live on http://localhost:${port}`);
+  startServices();
 });

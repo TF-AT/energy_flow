@@ -11,22 +11,30 @@ export interface CreateReadingDto {
 }
 
 export class ReadingService {
+  private static buffer: CreateReadingDto[] = [];
+  private static batchTimeout: NodeJS.Timeout | null = null;
+  private static BATCH_SIZE = 50;
+  private static BATCH_INTERVAL = 1000; // 1 second
+
   static async processReading(data: CreateReadingDto) {
     const { deviceId, voltage, current, frequency, timestamp, idempotencyKey } = data;
 
-    console.log(`[ReadingService] Processing reading from device: ${deviceId}`);
+    console.log(`[ReadingService] Buffering reading from device: ${deviceId}`);
 
-    // 1. Idempotency Check
-    if (idempotencyKey) {
-      const existing = await prisma.energyReading.findUnique({
-        where: { idempotencyKey }
-      });
-      if (existing) {
-        console.log(`[ReadingService] Duplicate idempotencyKey detected: ${idempotencyKey}`);
-        return existing;
-      }
+    // Add to buffer
+    this.buffer.push(data);
+
+    // If buffer reaches limit, flush immediately
+    if (this.buffer.length >= this.BATCH_SIZE) {
+      this.flushBuffer();
+    } else if (!this.batchTimeout) {
+      // Otherwise set a timeout to flush
+      this.batchTimeout = setTimeout(() => this.flushBuffer(), this.BATCH_INTERVAL);
     }
 
+    // For MVP consistency, we still perform individual device updates and alert checks 
+    // synchronously to ensure real-time UI response, but the "Big Write" is batched.
+    
     const device = await prisma.device.findUnique({
       where: { id: deviceId },
       include: { transformer: true },
@@ -36,18 +44,8 @@ export class ReadingService {
       throw new Error(`Device ${deviceId} not found`);
     }
 
-    // 2. Persist Reading and Update Device State
-    const [reading] = await Promise.all([
-      prisma.energyReading.create({
-        data: {
-          deviceId,
-          voltage,
-          current,
-          frequency,
-          timestamp,
-          idempotencyKey,
-        },
-      }),
+    // Update Device State (Single row update - fast)
+    await Promise.all([
       prisma.device.update({
         where: { id: deviceId },
         data: {
@@ -55,7 +53,6 @@ export class ReadingService {
           status: "online",
         },
       }),
-      // Resolve any communication lost alerts for this transformer
       prisma.alert.updateMany({
         where: {
           transformerId: device.transformerId,
@@ -66,9 +63,9 @@ export class ReadingService {
       }),
     ]);
 
-    // Notify SSE
-    eventEmitter.emit("reading", reading);
-
+    // SSE notification happens after flush for the reading itself
+    // but alert detection happens now
+    
     // 3. Alert Detection
     const alertsToCreate = [];
     const normalTypes = [];
@@ -103,16 +100,14 @@ export class ReadingService {
             transformerId: device.transformerId,
             type: alertData.type,
             message: alertData.message,
-            severity: alertData.severity, // Add severity here
+            severity: alertData.severity,
           },
         });
 
-        // Notify SSE
         eventEmitter.emit("alert", alert);
       }
     }
 
-    // Resolve fixed conditions
     if (normalTypes.length > 0) {
       await prisma.alert.updateMany({
         where: {
@@ -124,7 +119,41 @@ export class ReadingService {
       });
     }
 
-    console.log(`[ReadingService] Successfully processed reading for device ${deviceId}`);
-    return reading;
+    return { buffered: true };
+  }
+
+  private static async flushBuffer() {
+    if (this.buffer.length === 0) return;
+
+    if (this.batchTimeout) {
+      clearTimeout(this.batchTimeout);
+      this.batchTimeout = null;
+    }
+
+    const currentBatch = [...this.buffer];
+    this.buffer = [];
+
+    console.log(`[ReadingService] Flushing batch of ${currentBatch.length} readings`);
+
+    try {
+      // Use createMany for high-frequency write optimization
+      await prisma.energyReading.createMany({
+        data: currentBatch.map(r => ({
+          deviceId: r.deviceId,
+          voltage: r.voltage,
+          current: r.current,
+          frequency: r.frequency,
+          timestamp: r.timestamp,
+          idempotencyKey: r.idempotencyKey,
+        })),
+      });
+
+      // Notify SSE for all readings in batch
+      for (const reading of currentBatch) {
+        eventEmitter.emit("reading", reading);
+      }
+    } catch (error) {
+      console.error("[ReadingService] Failed to flush batch:", error);
+    }
   }
 }

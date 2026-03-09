@@ -41,9 +41,9 @@ export const api = {
     return data;
   },
   getDashboardData: () => fetcher<DashboardData>("/api/dashboard"),
-  getTransformers: () => fetcher<Transformer[]>("/transformers"),
-  getAlerts: () => fetcher<Alert[]>("/alerts"),
+  getTransformers: () => fetcher<Transformer[]>("/api/transformers"),
+  getAlerts: () => fetcher<Alert[]>("/api/alerts"),
   getReadings: (deviceId?: string, limit?: number) => 
-    fetcher<EnergyReading[]>(`/readings?${deviceId ? `deviceId=${deviceId}` : ""}${limit ? `&limit=${limit}` : ""}`),
-  getTransformerById: (id: string) => fetcher<Transformer>(`/transformers/${id}`),
+    fetcher<EnergyReading[]>(`/api/readings?${deviceId ? `deviceId=${deviceId}` : ""}${limit ? `&limit=${limit}` : ""}`),
+  getTransformerById: (id: string) => fetcher<Transformer>(`/api/transformers/${id}`),
 };

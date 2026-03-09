@@ -26,6 +26,27 @@ export const getTransformers = async (req: Request, res: Response, next: NextFun
   }
 };
 
+export const getTransformerById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const transformer = await prisma.transformer.findUnique({
+      where: { id },
+      include: { 
+        devices: true, 
+        alerts: { where: { isResolved: false } } 
+      },
+    });
+    
+    if (!transformer) {
+      return res.status(404).json({ error: "Transformer not found" });
+    }
+    
+    res.json(transformer);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getAlerts = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const alerts = await prisma.alert.findMany({
@@ -54,7 +75,7 @@ export const getDashboardData = async (req: Request, res: Response, next: NextFu
   }
 
   try {
-    const [transformersCount, activeAlerts, recentReadings, recentEvents] = await Promise.all([
+    const [transformersCount, activeAlerts, recentReadings, recentEvents, stats] = await Promise.all([
       prisma.transformer.count(),
       prisma.alert.findMany({
         where: { isResolved: false },
@@ -63,19 +84,22 @@ export const getDashboardData = async (req: Request, res: Response, next: NextFu
         include: { transformer: true }
       }),
       prisma.energyReading.findMany({
-        take: 2000,
+        take: 500, // Reduced from 2000 for MVP efficiency
         orderBy: { timestamp: "desc" },
       }),
       prisma.alert.findMany({
         take: 20,
         orderBy: { createdAt: "desc" },
         include: { transformer: true }
+      }),
+      prisma.alert.count({
+        where: { isResolved: false }
       })
     ]);
 
     const dashboardData = {
       transformersCount,
-      activeAlertsCount: activeAlerts.length,
+      activeAlertsCount: stats,
       recentAlerts: activeAlerts,
       recentReadings,
       recentEvents,
