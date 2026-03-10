@@ -1,5 +1,6 @@
 import prisma from "../lib/prisma";
 import { eventEmitter } from "../controllers/events.controller";
+import { emitAlert } from "../socket";
 
 export class MaintenanceService {
   /**
@@ -22,7 +23,7 @@ export class MaintenanceService {
           },
         },
         include: {
-          transformer: true,
+          site: true,
         },
       });
 
@@ -30,36 +31,34 @@ export class MaintenanceService {
 
       console.log(`[MaintenanceService] Found ${staleDevices.length} stale devices. Marking offline...`);
 
-      // Group stale devices by transformerId to handle alerts efficiently
-      const transformerIds = [...new Set(staleDevices.map(d => d.transformerId))];
-
       for (const device of staleDevices) {
         await prisma.device.update({
           where: { id: device.id },
           data: { status: "offline" },
         });
-      }
 
-      for (const transformerId of transformerIds) {
         const existingAlert = await prisma.alert.findFirst({
           where: {
-            transformerId,
+            deviceId: device.id,
             type: "COMMUNICATION_LOST",
             isResolved: false,
           },
         });
 
         if (!existingAlert) {
-          const device = staleDevices.find(d => d.transformerId === transformerId);
+          const alertData = {
+            deviceId: device.id,
+            type: "COMMUNICATION_LOST",
+            message: `COMMUNICATION LOST: Device at ${device.site?.name || 'Unknown'} has stopped reporting.`,
+            severity: "CRITICAL",
+          };
+          
           await prisma.alert.create({
-            data: {
-              transformerId,
-              type: "COMMUNICATION_LOST",
-              message: `COMMUNICATION LOST: Sensors at ${device?.transformer.location || 'Unknown'} have stopped reporting.`,
-              severity: "CRITICAL",
-            },
+            data: alertData,
           });
-          console.log(`[MaintenanceService] Created COMMUNICATION_LOST alert for transformer: ${transformerId}`);
+
+          emitAlert(alertData);
+          console.log(`[MaintenanceService] Created COMMUNICATION_LOST alert for device: ${device.id}`);
         }
       }
     } catch (error) {

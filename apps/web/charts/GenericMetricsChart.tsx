@@ -7,12 +7,12 @@ import {
 import { EnergyReading } from "../lib/types";
 
 interface ChartProps {
-  data: EnergyReading[];
-  dataKey: "current" | "frequency";
+  data: any[];
+  dataKey: string;
   title: string;
   color: string;
   unit: string;
-  domain: [number, number];
+  domain?: [number | string, number | string];
 }
 
 export default function GenericMetricsChart({ data, dataKey, title, color, unit, domain }: ChartProps) {

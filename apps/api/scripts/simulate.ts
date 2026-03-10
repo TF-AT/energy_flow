@@ -14,7 +14,7 @@ let currentGridState: GridState = "CRITICAL";
 
 async function registerDevice(id: string) {
   try {
-    await axios.post(`${API_URL}/devices/register`, {
+    await axios.post(`${API_URL}/api/devices/register`, {
       id,
       type: "iot_sensor",
       transformerId: DEFAULT_TRANSFORMER_ID,
@@ -53,7 +53,7 @@ async function sendReading(deviceId: string) {
   const current = Math.random() * 50;
 
   try {
-    await axios.post(`${API_URL}/readings`, {
+    await axios.post(`${API_URL}/api/readings`, {
       deviceId,
       voltage: parseFloat(voltage.toFixed(2)),
       current: parseFloat(current.toFixed(2)),

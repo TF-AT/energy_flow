@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Layout from "../../components/Layout";
 import { User, Bell, Info, Save, Shield, Cpu, Activity, Mail, MapPin, Hash } from "lucide-react";
+import { api } from "../../lib/api";
 
 interface ProfileState {
   name: string;
@@ -28,14 +29,60 @@ export default function SettingsPage() {
   const [alerts, setAlerts] = useState<AlertState>({
     highVoltage: 250,
     lowVoltage: 190,
-    frequency: 0.5
+    frequency: 1
   });
 
+  const [fetchedRules, setFetchedRules] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
+  useEffect(() => {
+    api.getAlertRules().then(rules => {
+      setFetchedRules(rules);
+      const hvRule = rules.find(r => r.metric === 'voltage' && r.condition === 'GREATER_THAN');
+      const lvRule = rules.find(r => r.metric === 'voltage' && r.condition === 'LESS_THAN');
+      const freqRule = rules.find(r => r.metric === 'frequency');
+
+      setAlerts({
+        highVoltage: hvRule?.criticalThreshold || 250,
+        lowVoltage: lvRule?.criticalThreshold || 190,
+        frequency: freqRule?.criticalThreshold ? freqRule.criticalThreshold - 50 : 1
+      });
+    }).catch(console.error);
+  }, []);
+
+  const handleSave = async () => {
     setSaving(true);
-    setTimeout(() => setSaving(false), 1000);
+    try {
+      const hvRule = fetchedRules.find(r => r.metric === 'voltage' && r.condition === 'GREATER_THAN');
+      if (hvRule) {
+        await api.updateAlertRule(hvRule.id, { criticalThreshold: alerts.highVoltage });
+      } else {
+        await api.createAlertRule({ deviceType: 'transformer', metric: 'voltage', condition: 'GREATER_THAN', criticalThreshold: alerts.highVoltage, warningThreshold: alerts.highVoltage - 10 });
+      }
+
+      const lvRule = fetchedRules.find(r => r.metric === 'voltage' && r.condition === 'LESS_THAN');
+      if (lvRule) {
+        await api.updateAlertRule(lvRule.id, { criticalThreshold: alerts.lowVoltage });
+      } else {
+        await api.createAlertRule({ deviceType: 'transformer', metric: 'voltage', condition: 'LESS_THAN', criticalThreshold: alerts.lowVoltage, warningThreshold: alerts.lowVoltage + 10 });
+      }
+
+      const freqRule = fetchedRules.find(r => r.metric === 'frequency');
+      if (freqRule) {
+        await api.updateAlertRule(freqRule.id, { criticalThreshold: 50 + alerts.frequency });
+      } else {
+        await api.createAlertRule({ deviceType: 'transformer', metric: 'frequency', condition: 'GREATER_THAN', criticalThreshold: 50 + alerts.frequency });
+      }
+
+      const updatedRules = await api.getAlertRules();
+      setFetchedRules(updatedRules);
+      alert("Settings saved successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save settings.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

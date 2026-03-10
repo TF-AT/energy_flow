@@ -1,159 +1,132 @@
 import prisma from "../lib/prisma";
 import { eventEmitter } from "../controllers/events.controller";
-
-export interface CreateReadingDto {
-  deviceId: string;
-  voltage: number;
-  current: number;
-  frequency: number;
-  timestamp: Date;
-  idempotencyKey?: string;
-}
+import { telemetryEvents } from "./telemetry.service";
+import { TelemetryEvent, TransformerMetrics, SolarMetrics, BatteryMetrics, LoadMetrics } from "../types/telemetry.types";
+import { AlertRuleService } from "./alert-rule.service";
 
 export class ReadingService {
-  private static buffer: CreateReadingDto[] = [];
-  private static batchTimeout: NodeJS.Timeout | null = null;
+  private static buffers = {
+    transformer: [] as any[],
+    solar: [] as any[],
+    battery: [] as any[],
+    load: [] as any[],
+  };
+
   private static BATCH_SIZE = 50;
-  private static BATCH_INTERVAL = 1000; // 1 second
+  private static BATCH_INTERVAL = 2000;
+  private static timeouts: Record<string, NodeJS.Timeout | null> = {
+    transformer: null,
+    solar: null,
+    battery: null,
+    load: null,
+  };
 
-  static async processReading(data: CreateReadingDto) {
-    const { deviceId, voltage, current, frequency, timestamp, idempotencyKey } = data;
-
-    console.log(`[ReadingService] Buffering reading from device: ${deviceId}`);
-
-    // Add to buffer
-    this.buffer.push(data);
-
-    // If buffer reaches limit, flush immediately
-    if (this.buffer.length >= this.BATCH_SIZE) {
-      this.flushBuffer();
-    } else if (!this.batchTimeout) {
-      // Otherwise set a timeout to flush
-      this.batchTimeout = setTimeout(() => this.flushBuffer(), this.BATCH_INTERVAL);
-    }
-
-    // For MVP consistency, we still perform individual device updates and alert checks 
-    // synchronously to ensure real-time UI response, but the "Big Write" is batched.
-    
-    const device = await prisma.device.findUnique({
-      where: { id: deviceId },
-      include: { transformer: true },
+  /**
+   * Initializes listeners for the telemetry pipeline.
+   */
+  static init() {
+    telemetryEvents.on("telemetry-for-db", (event: TelemetryEvent) => {
+      this.handleIncomingTelemetry(event);
     });
-
-    if (!device) {
-      throw new Error(`Device ${deviceId} not found`);
-    }
-
-    // Update Device State (Single row update - fast)
-    await Promise.all([
-      prisma.device.update({
-        where: { id: deviceId },
-        data: {
-          lastSeen: new Date(),
-          status: "online",
-        },
-      }),
-      prisma.alert.updateMany({
-        where: {
-          transformerId: device.transformerId,
-          type: "COMMUNICATION_LOST",
-          isResolved: false,
-        },
-        data: { isResolved: true },
-      }),
-    ]);
-
-    // SSE notification happens after flush for the reading itself
-    // but alert detection happens now
-    
-    // 3. Alert Detection
-    const alertsToCreate = [];
-    const normalTypes = [];
-
-    if (voltage > 250) {
-      alertsToCreate.push({ type: "OverVoltage", message: `Critical OverVoltage: ${voltage}V detected on device ${deviceId}`, severity: "CRITICAL" });
-    } else if (voltage < 180) {
-      alertsToCreate.push({ type: "UnderVoltage", message: `Critical UnderVoltage: ${voltage}V detected on device ${deviceId}`, severity: "WARNING" });
-    } else {
-      normalTypes.push("OverVoltage", "UnderVoltage");
-    }
-
-    if (frequency > 51 || frequency < 49) {
-      alertsToCreate.push({ type: "GridInstability", message: `Frequency anomaly: ${frequency}Hz detected on device ${deviceId}`, severity: "CRITICAL" });
-    } else {
-      normalTypes.push("GridInstability");
-    }
-
-    // Process Alerts
-    for (const alertData of alertsToCreate) {
-      const existingAlert = await prisma.alert.findFirst({
-        where: {
-          transformerId: device.transformerId,
-          type: alertData.type,
-          isResolved: false
-        }
-      });
-
-      if (!existingAlert) {
-        const alert = await prisma.alert.create({
-          data: {
-            transformerId: device.transformerId,
-            type: alertData.type,
-            message: alertData.message,
-            severity: alertData.severity,
-          },
-        });
-
-        eventEmitter.emit("alert", alert);
-      }
-    }
-
-    if (normalTypes.length > 0) {
-      await prisma.alert.updateMany({
-        where: {
-          transformerId: device.transformerId,
-          type: { in: normalTypes },
-          isResolved: false
-        },
-        data: { isResolved: true }
-      });
-    }
-
-    return { buffered: true };
+    console.log("[ReadingService] Telemetry persistence listeners initialized.");
   }
 
-  private static async flushBuffer() {
-    if (this.buffer.length === 0) return;
+  private static async handleIncomingTelemetry(event: TelemetryEvent) {
+    const { deviceId, deviceType, metrics, timestamp } = event;
+    const date = new Date(timestamp);
 
-    if (this.batchTimeout) {
-      clearTimeout(this.batchTimeout);
-      this.batchTimeout = null;
+    // Buffer the reading
+    this.buffers[deviceType].push({ ...metrics, deviceId, timestamp: date });
+
+    // Check for batch flush
+    if (this.buffers[deviceType].length >= this.BATCH_SIZE) {
+      this.flush(deviceType);
+    } else if (!this.timeouts[deviceType]) {
+      this.timeouts[deviceType] = setTimeout(() => this.flush(deviceType), this.BATCH_INTERVAL);
     }
 
-    const currentBatch = [...this.buffer];
-    this.buffer = [];
+    // Find device for context
+    const device = await prisma.device.findUnique({
+      where: { id: deviceId },
+      include: { site: { select: { organizationId: true } } },
+    });
 
-    console.log(`[ReadingService] Flushing batch of ${currentBatch.length} readings`);
-
-    try {
-      // Use createMany for high-frequency write optimization
-      await prisma.energyReading.createMany({
-        data: currentBatch.map(r => ({
-          deviceId: r.deviceId,
-          voltage: r.voltage,
-          current: r.current,
-          frequency: r.frequency,
-          timestamp: r.timestamp,
-          idempotencyKey: r.idempotencyKey,
-        })),
+    if (device) {
+      // Update Device Status
+      await prisma.device.update({
+        where: { id: deviceId },
+        data: { lastSeen: new Date(), status: "online" },
       });
 
-      // Notify SSE for all readings in batch
-      for (const reading of currentBatch) {
-        eventEmitter.emit("reading", reading);
+      // Evaluate dynamic rules
+      await AlertRuleService.evaluate(event, device.site.organizationId, deviceId);
+    }
+  }
+
+  private static async flush(type: string) {
+    const batch = [...this.buffers[type as keyof typeof this.buffers]];
+    this.buffers[type as keyof typeof this.buffers] = [];
+    
+    if (this.timeouts[type]) {
+      clearTimeout(this.timeouts[type]!);
+      this.timeouts[type] = null;
+    }
+
+    if (batch.length === 0) return;
+
+    try {
+      switch (type) {
+        case "transformer":
+          await prisma.energyReading.createMany({
+            data: batch.map(m => ({
+              deviceId: m.deviceId,
+              voltage: m.voltage,
+              current: 0, // Mock current if not provided
+              frequency: m.frequency,
+              timestamp: m.timestamp,
+            })),
+          });
+          break;
+        case "solar":
+          await prisma.solarReading.createMany({
+            data: batch.map(m => ({
+              solarGeneratorId: m.deviceId,
+              power_kw: m.power_kw,
+              efficiency: m.efficiency,
+              status: m.status,
+              timestamp: m.timestamp,
+            })),
+          });
+          break;
+        case "battery":
+          await prisma.batteryReading.createMany({
+            data: batch.map(m => ({
+              batteryStorageId: m.deviceId,
+              soc_percentage: m.soc,
+              charge_rate_kw: m.charge_rate,
+              temperature: m.temperature,
+              timestamp: m.timestamp,
+            })),
+          });
+          break;
+        case "load":
+          await prisma.loadReading.createMany({
+            data: batch.map(m => ({
+              energyLoadId: m.deviceId,
+              consumption_kw: m.consumption,
+              peak_demand_kw: m.peak_demand,
+              status: m.status,
+              timestamp: m.timestamp,
+            })),
+          });
+          break;
       }
+      
+      // Notify SSE/Web for legacy support if needed
+      batch.forEach(r => eventEmitter.emit("reading", r));
+      
     } catch (error) {
-      console.error("[ReadingService] Failed to flush batch:", error);
+      console.error(`[ReadingService] Failed to flush ${type} batch:`, error);
     }
   }
 }

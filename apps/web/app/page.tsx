@@ -17,12 +17,18 @@ import HealthScore from "../components/HealthScore";
 import { calculateGridStatus, calculateHealthScore } from "../lib/status-utils";
 import { useGridStatus } from "../context/GridStatusContext";
 
+import { useReadingsSocket } from "../hooks/useReadingsSocket";
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [prevData, setPrevData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedRange, setSelectedRange] = useState<TimeRange>(5);
   const { setStatus } = useGridStatus();
+  
+  // Real-time WebSocket hook
+  const { telemetry, newAlerts } = useReadingsSocket();
+  const latestReading = telemetry?.transformers?.[0];
 
   const refreshData = async () => {
     try {
@@ -47,7 +53,31 @@ export default function DashboardPage() {
     refreshData();
   }, []);
 
-  usePolling(refreshData, 10000);
+  usePolling(refreshData, 30000); // Increased polling interval since we have WS
+
+  // Merge WebSocket data into the UI state
+  const displayReadings = useMemo(() => {
+    if (!data) return [];
+    if (!latestReading) return data.recentReadings;
+    
+    // Check if the latest reading is already in the list to avoid duplicates
+    const exists = data.recentReadings.some(r => r.id === latestReading.id || r.timestamp === latestReading.timestamp);
+    if (exists) return data.recentReadings;
+
+    return [latestReading, ...data.recentReadings];
+  }, [data?.recentReadings, latestReading]);
+
+  const displayAlerts = useMemo(() => {
+    if (!data) return [];
+    // Combine fetched alerts with live WebSocket alerts
+    const combined = [...newAlerts, ...data.recentAlerts];
+    // Remove duplicates by ID or timestamp+message
+    return combined.filter((alert, index, self) => 
+      index === self.findIndex((t) => (
+        t.id === alert.id || (t.createdAt === alert.createdAt && t.message === alert.message)
+      ))
+    );
+  }, [data?.recentAlerts, newAlerts]);
 
   if (loading || !data) {
     return (
@@ -69,14 +99,14 @@ export default function DashboardPage() {
     );
   }
 
-  const currentReading = data.recentReadings[0];
-  const lastReading = prevData?.recentReadings[0];
+  const currentReading = latestReading || data.recentReadings[0];
+  const lastReading = latestReading ? data.recentReadings[0] : prevData?.recentReadings[0];
   
   const voltage = currentReading?.voltage ?? 0;
-  const isCritical = data.activeAlertsCount > 0 || (voltage > 260 || (voltage > 0 && voltage < 185));
-  const isWarning = !isCritical && (data.recentAlerts.length > 0 || (voltage > 240 || (voltage > 0 && voltage < 195)));
+  const isCritical = displayAlerts.some(a => a.severity === "CRITICAL" && !a.isResolved) || (voltage > 260 || (voltage > 0 && voltage < 185));
+  const isWarning = !isCritical && (displayAlerts.length > 0 || (voltage > 240 || (voltage > 0 && voltage < 195)));
 
-  const healthScore = calculateHealthScore(data.recentAlerts, data.recentReadings);
+  const healthScore = calculateHealthScore(displayAlerts, displayReadings);
 
   return (
     <Layout>
@@ -104,7 +134,7 @@ export default function DashboardPage() {
                  {isCritical ? 'Node Critical' : isWarning ? 'Node Warning' : 'Node Healthy'}
                </h1>
                <p className="text-xs text-text-secondary font-bold uppercase tracking-[0.2em]">
-                 01-LGS-NORTH Hub • Secondary Distribution Network
+                 01-LGS-NORTH Hub • {latestReading ? 'Live Streaming' : 'Polling Active'}
                </p>
             </div>
           </div>
@@ -113,11 +143,11 @@ export default function DashboardPage() {
              <HealthScore score={healthScore} />
              <div className="text-right flex flex-col items-end gap-2">
                 <div className="flex items-center gap-3 bg-card-bg border border-card-border px-4 py-2 rounded-xl">
-                   <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">Response Ready</span>
-                   <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                   <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">{latestReading ? 'Real-time Link' : 'Restored Link'}</span>
+                   <div className={`h-2 w-2 rounded-full ${latestReading ? 'bg-success animate-pulse' : 'bg-warning'}`} />
                 </div>
                 <p className="font-mono text-[11px] font-black text-text-muted uppercase tracking-widest">
-                  Sync: {new Date().toLocaleTimeString([], { hour12: false })} • {data.transformersCount} Assets Active
+                   Live: {new Date().toLocaleTimeString([], { hour12: false })} • {data.transformersCount} Assets Active
                 </p>
              </div>
           </div>
@@ -125,16 +155,16 @@ export default function DashboardPage() {
 
         {/* ALERT STATUS BANNER */}
         <AlertBanner 
-          latestAlert={data.recentAlerts[0] || null} 
-          activeAlertsCount={data.activeAlertsCount} 
+          latestAlert={displayAlerts[0] || null} 
+          activeAlertsCount={displayAlerts.filter(a => !a.isResolved).length} 
         />
 
         {/* TOP: Critical Indicators */}
         <div className="pt-2">
           <DashboardStats 
             transformersCount={data.transformersCount}
-            activeAlertsCount={data.activeAlertsCount}
-            currentVoltage={currentReading?.voltage || 0}
+            activeAlertsCount={displayAlerts.filter(a => !a.isResolved).length}
+            currentVoltage={voltage}
             currentFrequency={currentReading?.frequency || 0}
             prevVoltage={lastReading?.voltage}
             prevFrequency={lastReading?.frequency}
@@ -152,23 +182,23 @@ export default function DashboardPage() {
                  <TimeRangeSelector selectedRange={selectedRange} onRangeChange={setSelectedRange} />
               </div>
               <VoltageChart 
-                data={useMemo(() => data.recentReadings.filter(r => {
+                data={useMemo(() => displayReadings.filter(r => {
                   const readingTime = new Date(r.timestamp).getTime();
                   const now = Date.now();
                   return now - readingTime <= selectedRange * 60 * 1000;
-                }), [data.recentReadings, selectedRange])} 
+                }), [displayReadings, selectedRange])} 
                 height={500} 
               />
            </div>
            
            <div className="xl:col-span-1 h-[610px]">
-              <EventTimeline events={data.recentEvents} />
+              <EventTimeline events={displayAlerts} />
            </div>
         </div>
 
         {/* BOTTOM: Event Log */}
         <div className="pt-2 mt-10">
-           <AlertTable alerts={data.recentAlerts} />
+           <AlertTable alerts={displayAlerts} />
         </div>
       </div>
     </Layout>

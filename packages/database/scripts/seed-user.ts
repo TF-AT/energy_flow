@@ -1,4 +1,4 @@
-import { PrismaClient } from "../src/generated/client/index";
+import { PrismaClient } from "../src/generated/client/index.js";
 import * as bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
@@ -8,6 +8,8 @@ async function main() {
   const password = "password123";
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  const orgId = "org-energyflow-demo";
+
   const user = await prisma.user.upsert({
     where: { email },
     update: {},
@@ -15,7 +17,8 @@ async function main() {
       email,
       password: hashedPassword,
       name: "System Administrator",
-      role: "ADMIN"
+      role: "ADMIN",
+      organizationId: orgId,
     }
   });
 

@@ -1,9 +1,11 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import prisma from "../lib/prisma";
+import { AuthRequest } from "../middleware/auth.middleware";
 
-export const getMicrogrids = async (req: Request, res: Response, next: NextFunction) => {
+export const getMicrogrids = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const microgrids = await prisma.microgrid.findMany({
+    const microgrids = await prisma.site.findMany({
+      where: { organizationId: req.user.organizationId },
       include: { transformers: true },
     });
     res.json(microgrids);
@@ -12,12 +14,12 @@ export const getMicrogrids = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export const getTransformers = async (req: Request, res: Response, next: NextFunction) => {
+export const getTransformers = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const transformers = await prisma.transformer.findMany({
+      where: { site: { organizationId: req.user.organizationId } },
       include: { 
-        devices: true, 
-        alerts: { where: { isResolved: false } } 
+        devices: true,
       },
     });
     res.json(transformers);
@@ -26,18 +28,18 @@ export const getTransformers = async (req: Request, res: Response, next: NextFun
   }
 };
 
-export const getTransformerById = async (req: Request, res: Response, next: NextFunction) => {
+export const getTransformerById = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const transformer = await prisma.transformer.findUnique({
       where: { id },
       include: { 
         devices: true, 
-        alerts: { where: { isResolved: false } } 
+        site: true,
       },
     });
     
-    if (!transformer) {
+    if (!transformer || transformer.site.organizationId !== req.user.organizationId) {
       return res.status(404).json({ error: "Transformer not found" });
     }
     
@@ -47,11 +49,12 @@ export const getTransformerById = async (req: Request, res: Response, next: Next
   }
 };
 
-export const getAlerts = async (req: Request, res: Response, next: NextFunction) => {
+export const getAlerts = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const alerts = await prisma.alert.findMany({
+      where: { device: { site: { organizationId: req.user.organizationId } } },
       orderBy: { createdAt: "desc" },
-      include: { transformer: true },
+      include: { device: true },
     });
     res.json(alerts);
   } catch (error) {
@@ -59,41 +62,31 @@ export const getAlerts = async (req: Request, res: Response, next: NextFunction)
   }
 };
 
-// Simple in-memory cache
-let dashboardCache: {
-  data: any;
-  timestamp: number;
-} | null = null;
-
-const CACHE_TTL = 30 * 1000; // 30 seconds
-
-export const getDashboardData = async (req: Request, res: Response, next: NextFunction) => {
-  const now = Date.now();
-  
-  if (dashboardCache && (now - dashboardCache.timestamp) < CACHE_TTL) {
-    return res.json(dashboardCache.data);
-  }
+export const getDashboardData = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  const orgId = req.user.organizationId;
 
   try {
     const [transformersCount, activeAlerts, recentReadings, recentEvents, stats] = await Promise.all([
-      prisma.transformer.count(),
+      prisma.transformer.count({ where: { site: { organizationId: orgId } } }),
       prisma.alert.findMany({
-        where: { isResolved: false },
+        where: { isResolved: false, device: { site: { organizationId: orgId } } },
         take: 10,
         orderBy: { createdAt: "desc" },
-        include: { transformer: true }
+        include: { device: true }
       }),
       prisma.energyReading.findMany({
+        where: { device: { site: { organizationId: orgId } } },
         take: 500, // Reduced from 2000 for MVP efficiency
         orderBy: { timestamp: "desc" },
       }),
       prisma.alert.findMany({
+        where: { device: { site: { organizationId: orgId } } },
         take: 20,
         orderBy: { createdAt: "desc" },
-        include: { transformer: true }
+        include: { device: true }
       }),
       prisma.alert.count({
-        where: { isResolved: false }
+        where: { isResolved: false, device: { site: { organizationId: orgId } } }
       })
     ]);
 
@@ -103,12 +96,6 @@ export const getDashboardData = async (req: Request, res: Response, next: NextFu
       recentAlerts: activeAlerts,
       recentReadings,
       recentEvents,
-    };
-
-    // Update cache
-    dashboardCache = {
-      data: dashboardData,
-      timestamp: now,
     };
 
     res.json(dashboardData);
