@@ -9,7 +9,7 @@ export const getAlertRules = async (req: AuthRequest, res: Response, next: NextF
       where: { organizationId: req.user.organizationId },
       orderBy: { createdAt: "desc" },
     });
-    res.json(rules);
+    res.json({ status: "success", data: rules });
   } catch (error) {
     next(error);
   }
@@ -33,7 +33,7 @@ export const createAlertRule = async (req: AuthRequest, res: Response, next: Nex
     // Invalidate the cache to ensure the rule takes effect immediately
     AlertRuleService.invalidateCache(req.user.organizationId);
 
-    res.status(201).json(rule);
+    res.status(201).json({ status: "success", data: rule });
   } catch (error) {
     next(error);
   }
@@ -61,7 +61,7 @@ export const updateAlertRule = async (req: AuthRequest, res: Response, next: Nex
 
     AlertRuleService.invalidateCache(req.user.organizationId);
 
-    res.json(rule);
+    res.json({ status: "success", data: rule });
   } catch (error) {
     next(error);
   }

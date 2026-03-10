@@ -29,7 +29,7 @@ export const handleDevicePush = async (req: Request, res: Response, next: NextFu
     }
 
     DeviceGateway.handleWebhookPush(deviceId, payload);
-    res.status(202).json({ status: "accepted", timestamp: new Date() });
+    res.status(202).json({ status: "success", data: { status: "accepted", timestamp: new Date() } });
   } catch (error) {
     next(error);
   }
@@ -42,7 +42,7 @@ export const getSolarGenerators = async (req: AuthRequest, res: Response, next: 
       where: { site: { organizationId: req.user.organizationId } },
       include: { readings: { take: 1, orderBy: { timestamp: "desc" } } },
     });
-    res.json(generators);
+    res.json({ status: "success", data: generators });
   } catch (error) {
     next(error);
   }
@@ -58,7 +58,7 @@ export const getSolarGeneratorById = async (req: AuthRequest, res: Response, nex
     if (!generator || generator.site.organizationId !== req.user.organizationId) {
       return res.status(404).json({ error: "Solar Generator not found" });
     }
-    res.json(generator);
+    res.json({ status: "success", data: generator });
   } catch (error) {
     next(error);
   }
@@ -71,7 +71,7 @@ export const getBatteries = async (req: AuthRequest, res: Response, next: NextFu
       where: { site: { organizationId: req.user.organizationId } },
       include: { readings: { take: 1, orderBy: { timestamp: "desc" } } },
     });
-    res.json(batteries);
+    res.json({ status: "success", data: batteries });
   } catch (error) {
     next(error);
   }
@@ -87,7 +87,7 @@ export const getBatteryById = async (req: AuthRequest, res: Response, next: Next
     if (!battery || battery.site.organizationId !== req.user.organizationId) {
       return res.status(404).json({ error: "Battery not found" });
     }
-    res.json(battery);
+    res.json({ status: "success", data: battery });
   } catch (error) {
     next(error);
   }
@@ -100,7 +100,7 @@ export const getLoads = async (req: AuthRequest, res: Response, next: NextFuncti
       where: { site: { organizationId: req.user.organizationId } },
       include: { readings: { take: 1, orderBy: { timestamp: "desc" } } },
     });
-    res.json(loads);
+    res.json({ status: "success", data: loads });
   } catch (error) {
     next(error);
   }
@@ -116,7 +116,7 @@ export const getLoadById = async (req: AuthRequest, res: Response, next: NextFun
     if (!load || load.site.organizationId !== req.user.organizationId) {
       return res.status(404).json({ error: "Load not found" });
     }
-    res.json(load);
+    res.json({ status: "success", data: load });
   } catch (error) {
     next(error);
   }

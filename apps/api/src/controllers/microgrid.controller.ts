@@ -8,7 +8,7 @@ export const getMicrogrids = async (req: AuthRequest, res: Response, next: NextF
       where: { organizationId: req.user.organizationId },
       include: { transformers: true },
     });
-    res.json(microgrids);
+    res.json({ status: "success", data: microgrids });
   } catch (error) {
     next(error);
   }
@@ -22,7 +22,7 @@ export const getTransformers = async (req: AuthRequest, res: Response, next: Nex
         devices: true,
       },
     });
-    res.json(transformers);
+    res.json({ status: "success", data: transformers });
   } catch (error) {
     next(error);
   }
@@ -43,7 +43,7 @@ export const getTransformerById = async (req: AuthRequest, res: Response, next: 
       return res.status(404).json({ error: "Transformer not found" });
     }
     
-    res.json(transformer);
+    res.json({ status: "success", data: transformer });
   } catch (error) {
     next(error);
   }
@@ -56,7 +56,7 @@ export const getAlerts = async (req: AuthRequest, res: Response, next: NextFunct
       orderBy: { createdAt: "desc" },
       include: { device: true },
     });
-    res.json(alerts);
+    res.json({ status: "success", data: alerts });
   } catch (error) {
     next(error);
   }
@@ -98,7 +98,7 @@ export const getDashboardData = async (req: AuthRequest, res: Response, next: Ne
       recentEvents,
     };
 
-    res.json(dashboardData);
+    res.json({ status: "success", data: dashboardData });
   } catch (error) {
     next(error);
   }

@@ -5,12 +5,10 @@ import { verifyToken } from "../middleware/auth.middleware";
 const router = Router();
 
 // All microgrid routes are protected
-router.use(verifyToken);
-
-router.get("/dashboard", microgridController.getDashboardData);
-router.get("/microgrids", microgridController.getMicrogrids);
-router.get("/transformers", microgridController.getTransformers);
-router.get("/transformers/:id", microgridController.getTransformerById);
-router.get("/alerts", microgridController.getAlerts);
+router.get("/dashboard", verifyToken, microgridController.getDashboardData);
+router.get("/microgrids", verifyToken, microgridController.getMicrogrids);
+router.get("/transformers", verifyToken, microgridController.getTransformers);
+router.get("/transformers/:id", verifyToken, microgridController.getTransformerById);
+router.get("/alerts", verifyToken, microgridController.getAlerts);
 
 export default router;

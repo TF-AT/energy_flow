@@ -18,6 +18,7 @@ export const metadata: Metadata = {
 };
 
 import { GridStatusProvider } from "../context/GridStatusContext";
+import { NetworkProvider } from "../context/NetworkContext";
 
 export default function RootLayout({
   children,
@@ -25,11 +26,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="antialiased">
-        <GridStatusProvider>
-          {children}
-        </GridStatusProvider>
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+      <body className="antialiased" suppressHydrationWarning>
+        <NetworkProvider>
+          <GridStatusProvider>
+            {children}
+          </GridStatusProvider>
+        </NetworkProvider>
       </body>
     </html>
   );

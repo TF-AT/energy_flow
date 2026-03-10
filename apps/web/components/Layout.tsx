@@ -4,6 +4,7 @@ import { LayoutDashboard, Server, AlertTriangle, Settings, LogOut, Sun, Battery,
 import Cookies from "js-cookie";
 
 import { useGridStatus } from "../context/GridStatusContext";
+import { useNetworkStatus } from "../context/NetworkContext";
 
 export type GridStatus = "nominal" | "warning" | "critical";
 
@@ -13,6 +14,7 @@ export default function Layout({
   children: React.ReactNode;
 }) {
   const { status } = useGridStatus();
+  const { isOffline } = useNetworkStatus();
   
   const statusConfig = {
     nominal: { color: "text-emerald-400", label: "NOMINAL" },
@@ -58,8 +60,14 @@ export default function Layout({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-grow overflow-y-auto">
-        <header className="h-16 border-b border-[#2d2d33] bg-[#0a0a0b]/80 backdrop-blur-md sticky top-0 z-10 flex items-center justify-between px-8">
+      <main className="flex-grow overflow-y-auto flex flex-col">
+        {isOffline && (
+          <div className="bg-critical/20 border-b border-critical/40 text-critical px-8 py-2 flex items-center justify-center gap-2 text-sm font-bold animate-pulse z-50">
+            <AlertTriangle size={16} />
+            Connection Lost. Attempting to reconnect...
+          </div>
+        )}
+        <header className="h-16 shrink-0 border-b border-[#2d2d33] bg-[#0a0a0b]/80 backdrop-blur-md sticky top-0 z-10 flex items-center justify-between px-8">
           <div className="text-sm font-bold text-[#64748b]">
             <span className={`${color} mr-2 transition-colors duration-500`}>●</span> 
             GRID STATUS: <span className={`${color} transition-colors duration-500`}>{label}</span>

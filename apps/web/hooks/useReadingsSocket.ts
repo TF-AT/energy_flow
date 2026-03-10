@@ -1,28 +1,36 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { Alert } from "../lib/types";
+import { useTelemetryStore } from "../store/telemetryStore";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:3001";
 
-export interface TelemetryData {
-  transformers: any[];
-  solar: any[];
-  batteries: any[];
-  loads: any[];
-}
-
 export function useReadingsSocket() {
-  const [telemetry, setTelemetry] = useState<TelemetryData>({
-    transformers: [],
-    solar: [],
-    batteries: [],
-    loads: [],
-  });
-  const [newAlerts, setNewAlerts] = useState<Alert[]>([]);
-  const [isConnected, setIsConnected] = useState(false);
+  const processBatchedTelemetry = useTelemetryStore(state => state.processBatchedTelemetry);
+  const processBatchedAlerts = useTelemetryStore(state => state.processBatchedAlerts);
+  const setIsConnected = useTelemetryStore(state => state.setIsConnected);
+  const clearAlerts = useTelemetryStore(state => state.clearAlerts);
+
+  const telemetryBuffer = useRef<any[]>([]);
+  const alertsBuffer = useRef<Alert[]>([]);
 
   useEffect(() => {
     let socket: WebSocket;
     let reconnectTimeout: NodeJS.Timeout;
+    
+    // Batch processing interval
+    const flushInterval = setInterval(() => {
+      // Flush telemetry buffer
+      if (telemetryBuffer.current.length > 0) {
+        processBatchedTelemetry([...telemetryBuffer.current]);
+        telemetryBuffer.current = []; // Clear current buffer
+      }
+
+      // Flush alerts buffer
+      if (alertsBuffer.current.length > 0) {
+        processBatchedAlerts([...alertsBuffer.current]);
+        alertsBuffer.current = [];
+      }
+    }, 1000); // 1 second batching interval
 
     const connect = () => {
       const token = localStorage.getItem("auth_token");
@@ -43,39 +51,11 @@ export function useReadingsSocket() {
         try {
           const payload = JSON.parse(event.data);
           
+          // Push to buffers instead of triggering React state updates directly
           if (payload.type === "telemetry") {
-            const eventData = payload.data; // This is an individual TelemetryEvent
-            const categoryMap: Record<string, keyof TelemetryData> = {
-              transformer: "transformers",
-              solar: "solar",
-              battery: "batteries",
-              load: "loads"
-            };
-
-            const category = categoryMap[eventData.deviceType];
-            if (category) {
-              setTelemetry((prev) => {
-                const updatedCategory = [...prev[category]];
-                const index = updatedCategory.findIndex(d => d.deviceId === eventData.deviceId || d.id === eventData.deviceId);
-                
-                // Flatten metrics into the object for backward compatibility with components
-                const flattenedReading = {
-                  ...eventData.metrics,
-                  deviceId: eventData.deviceId,
-                  timestamp: eventData.timestamp
-                };
-
-                if (index !== -1) {
-                  updatedCategory[index] = flattenedReading;
-                } else {
-                  updatedCategory.push(flattenedReading);
-                }
-
-                return { ...prev, [category]: updatedCategory };
-              });
-            }
+            telemetryBuffer.current.push(payload.data);
           } else if (payload.type === "alert") {
-            setNewAlerts((prev) => [payload.data, ...prev]);
+            alertsBuffer.current.push(payload.data);
           }
         } catch (error) {
           console.error("[WS] Failed to parse message:", error);
@@ -99,12 +79,9 @@ export function useReadingsSocket() {
     return () => {
       if (socket) socket.close();
       clearTimeout(reconnectTimeout);
+      clearInterval(flushInterval);
     };
-  }, []);
+  }, [processBatchedTelemetry, processBatchedAlerts, setIsConnected]);
 
-  const clearAlerts = useCallback(() => {
-    setNewAlerts([]);
-  }, []);
-
-  return { telemetry, newAlerts, isConnected, clearAlerts };
+  return { clearAlerts };
 }

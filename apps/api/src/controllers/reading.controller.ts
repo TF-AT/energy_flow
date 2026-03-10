@@ -21,7 +21,7 @@ export const registerDevice = async (req: Request, res: Response, next: NextFunc
       update: { type, transformerId, siteId },
       create: { id, type, transformerId, siteId },
     });
-    res.status(201).json(device);
+    res.status(201).json({ status: "success", data: device });
   } catch (error) {
     next(error);
   }
@@ -35,9 +35,19 @@ export const createReading = async (req: Request, res: Response, next: NextFunct
   const frequency = parseFloat(fRaw);
 
   try {
+    const device = await prisma.device.findUnique({
+      where: { id: deviceId },
+      include: { site: true }
+    });
+
+    if (!device || !device.site) {
+      return res.status(404).json({ error: "Device or associated Site not found" });
+    }
+
     TelemetryService.ingest({
       deviceId,
       deviceType: "transformer", // Legacy HTTP ingestion assumed to be transformer
+      organizationId: device.site.organizationId,
       metrics: {
         voltage,
         load: current, // The new standard uses load instead of current
@@ -46,7 +56,7 @@ export const createReading = async (req: Request, res: Response, next: NextFunct
       timestamp: timestamp ? new Date(timestamp).getTime() : Date.now(),
     });
 
-    res.status(202).json({ message: "Telemetry accepted" });
+    res.status(202).json({ status: "success", data: { message: "Telemetry accepted" } });
   } catch (error: any) {
     if (error.message.includes("out of bounds")) {
       return res.status(400).json({ error: error.message });
@@ -66,7 +76,7 @@ export const getReadings = async (req: AuthRequest, res: Response, next: NextFun
       take: parseInt(limit as string),
       orderBy: { timestamp: "desc" },
     });
-    res.json(readings);
+    res.json({ status: "success", data: readings });
   } catch (error) {
     next(error);
   }

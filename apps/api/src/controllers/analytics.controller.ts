@@ -9,7 +9,7 @@ export const getPowerOutputAnalytics = async (req: AuthRequest, res: Response, n
     const end = endTime ? new Date(endTime as string) : new Date();
 
     const data = await AnalyticsService.getPowerOutput(req.user.organizationId, start, end, deviceId as string);
-    res.json(data);
+    res.json({ status: "success", data });
   } catch (error) {
     next(error);
   }
@@ -22,7 +22,7 @@ export const getLoadConsumptionAnalytics = async (req: AuthRequest, res: Respons
     const end = endTime ? new Date(endTime as string) : new Date();
 
     const data = await AnalyticsService.getLoadConsumption(req.user.organizationId, start, end, deviceId as string);
-    res.json(data);
+    res.json({ status: "success", data });
   } catch (error) {
     next(error);
   }
@@ -35,7 +35,7 @@ export const getBatteryAnalytics = async (req: AuthRequest, res: Response, next:
     const end = endTime ? new Date(endTime as string) : new Date();
 
     const data = await AnalyticsService.getBatteryTrends(req.user.organizationId, start, end, deviceId as string);
-    res.json(data);
+    res.json({ status: "success", data });
   } catch (error) {
     next(error);
   }
@@ -48,7 +48,7 @@ export const getGridHealthAnalytics = async (req: AuthRequest, res: Response, ne
     const end = endTime ? new Date(endTime as string) : new Date();
 
     const data = await AnalyticsService.getGridHealth(req.user.organizationId, start, end);
-    res.json(data);
+    res.json({ status: "success", data });
   } catch (error) {
     next(error);
   }

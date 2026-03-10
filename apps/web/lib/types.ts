@@ -105,3 +105,10 @@ export interface DashboardData {
   recentEvents: Alert[];
   recentReadings: EnergyReading[];
 }
+
+export interface TelemetryData {
+  transformers: any[];
+  solar: any[];
+  batteries: any[];
+  loads: any[];
+}

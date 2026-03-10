@@ -11,6 +11,21 @@ const DEFAULT_TRANSFORMER_ID = "tr-broad-01";
 // Simulation States
 type GridState = "HEALTHY" | "WARNING" | "CRITICAL";
 let currentGridState: GridState = "CRITICAL";
+let authToken: string | null = null;
+
+async function login() {
+  try {
+    const response = await axios.post(`${API_URL}/api/auth/login`, {
+      email: "admin@energyflow.com",
+      password: "password123",
+    });
+    authToken = response.data.token;
+    console.log("Simulator authenticated successfully.");
+  } catch (error: any) {
+    console.error("Simulator authentication failed:", error.response?.data?.error || error.message);
+    process.exit(1);
+  }
+}
 
 async function registerDevice(id: string) {
   try {
@@ -18,6 +33,7 @@ async function registerDevice(id: string) {
       id,
       type: "iot_sensor",
       transformerId: DEFAULT_TRANSFORMER_ID,
+      siteId: "site-lagos-1",
       token: "energy_secret_2026"
     });
     console.log(`Registered device: ${id}`);
@@ -59,6 +75,10 @@ async function sendReading(deviceId: string) {
       current: parseFloat(current.toFixed(2)),
       frequency: parseFloat(frequency.toFixed(2)),
       timestamp: new Date().toISOString(),
+    }, {
+      headers: {
+        Authorization: `Bearer ${authToken}`
+      }
     });
     
     // Status color indicator in console
@@ -72,6 +92,8 @@ async function sendReading(deviceId: string) {
 async function startSimulation() {
   console.log(`\x1b[36m>>> Starting Automated Grid Stabilization Demo <<<\x1b[0m`);
   console.log(`Objective: Demonstrate situational awareness & state transitions.`);
+
+  await login();
 
   const devices = Array.from({ length: DEVICE_COUNT }, (_, i) => `sim-dev-${i + 1}`);
 

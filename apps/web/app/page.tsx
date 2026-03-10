@@ -9,26 +9,33 @@ import VoltageChart from "../charts/VoltageChart";
 import TimeRangeSelector, { TimeRange } from "../components/TimeRangeSelector";
 import EventTimeline from "../components/EventTimeline";
 import { api } from "../lib/api";
-import { DashboardData } from "../lib/types";
+import { DashboardData, EnergyReading } from "../lib/types";
 import { usePolling } from "../lib/hooks";
 import { Activity, ShieldCheck, ShieldAlert, Shield } from "lucide-react";
 
 import HealthScore from "../components/HealthScore";
 import { calculateGridStatus, calculateHealthScore } from "../lib/status-utils";
 import { useGridStatus } from "../context/GridStatusContext";
-
 import { useReadingsSocket } from "../hooks/useReadingsSocket";
+import { useTelemetryStore } from "../store/telemetryStore";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [prevData, setPrevData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedRange, setSelectedRange] = useState<TimeRange>(5);
+  const [mounted, setMounted] = useState(false);
   const { setStatus } = useGridStatus();
   
-  // Real-time WebSocket hook
-  const { telemetry, newAlerts } = useReadingsSocket();
-  const latestReading = telemetry?.transformers?.[0];
+  // Initialize socket connection
+  useReadingsSocket();
+  
+  // Directly subscribe to ultra-fast Zustand slices
+  const liveReadings = useTelemetryStore(state => state.liveReadings);
+  const newAlerts = useTelemetryStore(state => state.newAlerts);
+  const isConnected = useTelemetryStore(state => state.isConnected);
+
+  const latestReading = liveReadings.length > 0 ? liveReadings[0] : undefined;
 
   const refreshData = async () => {
     try {
@@ -50,22 +57,21 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    setMounted(true);
     refreshData();
   }, []);
 
-  usePolling(refreshData, 30000); // Increased polling interval since we have WS
+  // usePolling(refreshData, 30000); // Removed redundant polling as per integration audit
 
   // Merge WebSocket data into the UI state
   const displayReadings = useMemo(() => {
     if (!data) return [];
-    if (!latestReading) return data.recentReadings;
     
-    // Check if the latest reading is already in the list to avoid duplicates
-    const exists = data.recentReadings.some(r => r.id === latestReading.id || r.timestamp === latestReading.timestamp);
-    if (exists) return data.recentReadings;
-
-    return [latestReading, ...data.recentReadings];
-  }, [data?.recentReadings, latestReading]);
+    // Prioritize clean, aggregated live readings to prevent the 50-device zigzag noise
+    if (liveReadings.length > 0) return liveReadings;
+    
+    return data.recentReadings;
+  }, [data?.recentReadings, liveReadings]);
 
   const displayAlerts = useMemo(() => {
     if (!data) return [];
@@ -78,6 +84,14 @@ export default function DashboardPage() {
       ))
     );
   }, [data?.recentAlerts, newAlerts]);
+  
+  const filteredReadings = useMemo(() => {
+    return displayReadings.filter(r => {
+      const readingTime = new Date(r.timestamp).getTime();
+      const now = Date.now();
+      return now - readingTime <= selectedRange * 60 * 1000;
+    });
+  }, [displayReadings, selectedRange]);
 
   if (loading || !data) {
     return (
@@ -147,7 +161,7 @@ export default function DashboardPage() {
                    <div className={`h-2 w-2 rounded-full ${latestReading ? 'bg-success animate-pulse' : 'bg-warning'}`} />
                 </div>
                 <p className="font-mono text-[11px] font-black text-text-muted uppercase tracking-widest">
-                   Live: {new Date().toLocaleTimeString([], { hour12: false })} • {data.transformersCount} Assets Active
+                   Live: {mounted ? new Date().toLocaleTimeString([], { hour12: false }) : "--:--:--"} • {data.transformersCount} Assets Active
                 </p>
              </div>
           </div>
@@ -182,12 +196,9 @@ export default function DashboardPage() {
                  <TimeRangeSelector selectedRange={selectedRange} onRangeChange={setSelectedRange} />
               </div>
               <VoltageChart 
-                data={useMemo(() => displayReadings.filter(r => {
-                  const readingTime = new Date(r.timestamp).getTime();
-                  const now = Date.now();
-                  return now - readingTime <= selectedRange * 60 * 1000;
-                }), [displayReadings, selectedRange])} 
+                data={filteredReadings} 
                 height={500} 
+                isLive={!!latestReading}
               />
            </div>
            

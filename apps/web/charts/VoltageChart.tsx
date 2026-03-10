@@ -10,9 +10,10 @@ interface ChartProps {
   data: EnergyReading[];
   title?: string;
   height?: number;
+  isLive?: boolean;
 }
 
-export default function VoltageChart({ data, title = "Phase Voltage Diagnostics", height = 400 }: ChartProps) {
+export default function VoltageChart({ data, title = "Phase Voltage Diagnostics", height = 400, isLive = false }: ChartProps) {
   const chartData = [...data].reverse().map(r => ({
     time: new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     voltage: r.voltage,
@@ -32,8 +33,10 @@ export default function VoltageChart({ data, title = "Phase Voltage Diagnostics"
           </div>
           <div className="h-4 w-px bg-card-border" />
           <div className="flex items-center gap-2">
-             <span className="h-2 w-2 rounded-full bg-info animate-pulse" />
-             <span className="text-[10px] font-black text-info uppercase tracking-widest">Live Stream</span>
+             <span className={`h-2 w-2 rounded-full ${isLive ? 'bg-success animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-text-muted'}`} />
+             <span className={`text-[10px] font-black uppercase tracking-widest ${isLive ? 'text-success' : 'text-text-muted'}`}>
+                {isLive ? 'Live Stream Active' : 'Polling'}
+             </span>
           </div>
         </div>
       </div>

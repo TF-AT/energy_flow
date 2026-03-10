@@ -8,15 +8,13 @@ const router = Router();
 router.post("/ingest/:deviceId", infrastructureController.handleDevicePush);
 
 // Infrastructure routes are protected
-router.use(verifyToken);
+router.get("/solar", verifyToken, infrastructureController.getSolarGenerators);
+router.get("/solar/:id", verifyToken, infrastructureController.getSolarGeneratorById);
 
-router.get("/solar", infrastructureController.getSolarGenerators);
-router.get("/solar/:id", infrastructureController.getSolarGeneratorById);
+router.get("/batteries", verifyToken, infrastructureController.getBatteries);
+router.get("/batteries/:id", verifyToken, infrastructureController.getBatteryById);
 
-router.get("/batteries", infrastructureController.getBatteries);
-router.get("/batteries/:id", infrastructureController.getBatteryById);
-
-router.get("/loads", infrastructureController.getLoads);
-router.get("/loads/:id", infrastructureController.getLoadById);
+router.get("/loads", verifyToken, infrastructureController.getLoads);
+router.get("/loads/:id", verifyToken, infrastructureController.getLoadById);
 
 export default router;
