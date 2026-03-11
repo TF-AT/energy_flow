@@ -9,12 +9,13 @@ datasource db {
 }
 
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
+  id         String      @id @default(uuid())
+  name       String
+  createdAt  DateTime    @default(now())
   sites      Site[]
   users      User[]
   alertRules AlertRule[]
+  microgrids Microgrid[]
 }
 
 model Site {
@@ -30,15 +31,16 @@ model Site {
   batteries       BatteryStorage[]
   loads           EnergyLoad[]
   devices         Device[]
+  energyNode      EnergyNode?
 }
 
 model Transformer {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   location    String
   capacity_kw Float
   siteId      String
-  createdAt   DateTime  @default(now())
-  site        Site      @relation(fields: [siteId], references: [id])
+  createdAt   DateTime @default(now())
+  site        Site     @relation(fields: [siteId], references: [id])
   devices     Device[]
 }
 
@@ -50,7 +52,7 @@ model Device {
   apiKey        String          @unique @default(uuid())
   status        String          @default("online")
   lastSeen      DateTime        @default(now())
-  metadata      String?         // JSON string for device-specific config
+  metadata      String? // JSON string for device-specific config
   transformerId String?
   createdAt     DateTime        @default(now())
   site          Site            @relation(fields: [siteId], references: [id])
@@ -72,13 +74,14 @@ model EnergyReading {
 }
 
 model SolarGenerator {
-  id          String         @id @default(uuid())
-  name        String
-  location    String
-  siteId      String
-  createdAt   DateTime       @default(now())
-  site        Site           @relation(fields: [siteId], references: [id])
-  readings    SolarReading[]
+  id             String          @id @default(uuid())
+  name           String
+  location       String
+  siteId         String
+  createdAt      DateTime        @default(now())
+  site           Site            @relation(fields: [siteId], references: [id])
+  readings       SolarReading[]
+  energyProducer EnergyProducer?
 }
 
 model SolarReading {
@@ -93,13 +96,14 @@ model SolarReading {
 }
 
 model BatteryStorage {
-  id          String           @id @default(uuid())
-  name        String
-  location    String
-  siteId      String
-  createdAt   DateTime         @default(now())
-  site        Site             @relation(fields: [siteId], references: [id])
-  readings    BatteryReading[]
+  id            String           @id @default(uuid())
+  name          String
+  location      String
+  siteId        String
+  createdAt     DateTime         @default(now())
+  site          Site             @relation(fields: [siteId], references: [id])
+  readings      BatteryReading[]
+  energyStorage EnergyStorage?
 }
 
 model BatteryReading {
@@ -114,13 +118,14 @@ model BatteryReading {
 }
 
 model EnergyLoad {
-  id          String        @id @default(uuid())
-  name        String
-  location    String
-  siteId      String
-  createdAt   DateTime      @default(now())
-  site        Site          @relation(fields: [siteId], references: [id])
-  readings    LoadReading[]
+  id             String          @id @default(uuid())
+  name           String
+  location       String
+  siteId         String
+  createdAt      DateTime        @default(now())
+  site           Site            @relation(fields: [siteId], references: [id])
+  readings       LoadReading[]
+  energyConsumer EnergyConsumer?
 }
 
 model LoadReading {
@@ -135,14 +140,14 @@ model LoadReading {
 }
 
 model Alert {
-  id            String      @id @default(uuid())
-  deviceId      String
-  type          String
-  message       String
-  severity      String      @default("WARNING")
-  isResolved    Boolean     @default(false)
-  createdAt     DateTime    @default(now())
-  device        Device      @relation(fields: [deviceId], references: [id])
+  id         String   @id @default(uuid())
+  deviceId   String
+  type       String
+  message    String
+  severity   String   @default("WARNING")
+  isResolved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  device     Device   @relation(fields: [deviceId], references: [id])
 }
 
 model User {
@@ -160,12 +165,96 @@ model User {
 model AlertRule {
   id                String       @id @default(uuid())
   organizationId    String
-  deviceType        String       // e.g., "transformer", "solar", "battery", "load"
-  metric            String       // e.g., "voltage", "frequency", "soc", "temperature"
+  deviceType        String // e.g., "transformer", "solar", "battery", "load"
+  metric            String // e.g., "voltage", "frequency", "soc", "temperature"
   warningThreshold  Float?
   criticalThreshold Float?
-  condition         String       // e.g., "GREATER_THAN", "LESS_THAN", "OUTSIDE_RANGE"
+  condition         String // e.g., "GREATER_THAN", "LESS_THAN", "OUTSIDE_RANGE"
   organization      Organization @relation(fields: [organizationId], references: [id])
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
+}
+
+model Microgrid {
+  id             String        @id @default(uuid())
+  organizationId String
+  name           String
+  region         String
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  nodes          EnergyNode[]
+  trades         EnergyTrade[]
+}
+
+model EnergyNode {
+  id                 String           @id @default(uuid())
+  microgridId        String
+  siteId             String?          @unique
+  name               String
+  type               String // "CONSUMER", "PRODUCER", "PROSUMER", "STORAGE"
+
+  // Capabilities
+  hasSolar           Boolean          @default(false)
+  hasBattery         Boolean          @default(false)
+  hasEvCharger       Boolean          @default(false)
+
+  // Fixed Metrics
+  maxGenerationKw    Float?
+  baseLoadKw         Float?
+  batteryCapacityKwh Float?
+
+  createdAt          DateTime         @default(now())
+  microgrid          Microgrid        @relation(fields: [microgridId], references: [id])
+  site               Site?            @relation(fields: [siteId], references: [id])
+  producers          EnergyProducer[]
+  consumers          EnergyConsumer[]
+  storages           EnergyStorage[]
+  tradesAsBuyer      EnergyTrade[]    @relation("BuyerTrades")
+  tradesAsSeller     EnergyTrade[]    @relation("SellerTrades")
+}
+
+model EnergyProducer {
+  id               String          @id @default(uuid())
+  nodeId           String
+  solarGeneratorId String?         @unique
+  type             String // "SOLAR", "WIND", "GENERATOR"
+  capacity_kw      Float
+  node             EnergyNode      @relation(fields: [nodeId], references: [id])
+  solarGenerator   SolarGenerator? @relation(fields: [solarGeneratorId], references: [id])
+}
+
+model EnergyConsumer {
+  id           String      @id @default(uuid())
+  nodeId       String
+  energyLoadId String?     @unique
+  type         String // "APPLIANCE", "BUILDING_BASE_LOAD"
+  maxDemand_kw Float
+  node         EnergyNode  @relation(fields: [nodeId], references: [id])
+  energyLoad   EnergyLoad? @relation(fields: [energyLoadId], references: [id])
+}
+
+model EnergyStorage {
+  id               String          @id @default(uuid())
+  nodeId           String
+  batteryStorageId String?         @unique
+  type             String // "BATTERY", "THERMAL"
+  capacity_kwh     Float
+  max_charge_kw    Float
+  max_discharge_kw Float
+  node             EnergyNode      @relation(fields: [nodeId], references: [id])
+  batteryStorage   BatteryStorage? @relation(fields: [batteryStorageId], references: [id])
+}
+
+model EnergyTrade {
+  id           String     @id @default(uuid())
+  microgridId  String
+  sellerNodeId String
+  buyerNodeId  String
+  amount_kwh   Float
+  pricePerKwh  Float
+  status       String // "PENDING", "COMPLETED", "FAILED"
+  timestamp    DateTime   @default(now())
+  microgrid    Microgrid  @relation(fields: [microgridId], references: [id])
+  seller       EnergyNode @relation("SellerTrades", fields: [sellerNodeId], references: [id])
+  buyer        EnergyNode @relation("BuyerTrades", fields: [buyerNodeId], references: [id])
 }

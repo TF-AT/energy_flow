@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { MaintenanceService } from "./services/maintenance.service";
 import { ReadingService } from "./services/reading.service";
 import { DeviceGateway } from "./services/gateway.service";
+import { PeerToPeerTradingService } from "./services/p2p-trading.service";
 import { errorHandler } from "./middleware/error.middleware";
 import * as eventsController from "./controllers/events.controller";
 import apiRouter from "./routes";
@@ -39,6 +40,8 @@ const startServices = async () => {
     ReadingService.init();
     // Initialize Device Gateway (IoT layer)
     await DeviceGateway.init();
+    // Initialize P2P Trading Engine
+    PeerToPeerTradingService.init();
     // Dead-man switch check
     setInterval(() => MaintenanceService.checkDeviceHealth(), 15000);
 };

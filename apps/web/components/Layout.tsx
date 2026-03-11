@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { LayoutDashboard, Server, AlertTriangle, Settings, LogOut, Sun, Battery, Activity, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Server, AlertTriangle, Settings, LogOut, Sun, Battery, Activity, BarChart3, Network } from "lucide-react";
 import Cookies from "js-cookie";
 
 import { useGridStatus } from "../context/GridStatusContext";
@@ -42,6 +42,7 @@ export default function Layout({
 
         <nav className="flex-grow p-4 space-y-2">
           <NavLink href="/" icon={<LayoutDashboard size={18} />} label="Dashboard" />
+          <NavLink href="/vpp" icon={<Network size={18} />} label="Virtual Power Plant" />
           <NavLink href="/transformers" icon={<Server size={18} />} label="Transformers" />
           <NavLink href="/solar" icon={<Sun size={18} />} label="Solar Generation" />
           <NavLink href="/batteries" icon={<Battery size={18} />} label="Energy Storage" />
