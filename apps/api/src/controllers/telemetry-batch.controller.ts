@@ -22,7 +22,6 @@ export const handleTelemetryBatch = async (req: Request, res: Response) => {
 
     // 3. Emit processed events for the routing engine
     nodeStats.forEach((stats, nodeId) => {
-      const netPowerKw = stats.gen - stats.con;
       const isSurplus = netPowerKw > 0;
 
       eventEmitter.emit("vpp:netPowerUpdated", {

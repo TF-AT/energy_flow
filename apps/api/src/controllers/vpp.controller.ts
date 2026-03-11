@@ -28,12 +28,23 @@ export const getMicrogrids = async (req: AuthRequest, res: Response, next: NextF
 
 export const createNode = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { microgridId, name, type, siteId } = req.body;
+    const { 
+      microgridId, name, type, siteId, 
+      hasSolar, hasBattery, hasEvCharger, 
+      maxGenerationKw, baseLoadKw, batteryCapacityKwh 
+    } = req.body;
+
     const node = await VppTopologyService.createNode({
       microgridId,
       name,
       type,
-      siteId
+      siteId,
+      hasSolar,
+      hasBattery,
+      hasEvCharger,
+      maxGenerationKw,
+      baseLoadKw,
+      batteryCapacityKwh
     });
     res.json({ status: "success", data: node });
   } catch (error) {

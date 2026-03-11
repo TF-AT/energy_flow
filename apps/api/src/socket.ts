@@ -39,7 +39,18 @@ export const initWebSocket = (server: HttpServer) => {
     broadcast(event);
   });
 
-  console.log("[WS] WebSocket server initialized and linked to TelemetryService");
+  // --- VPP Real-Time Event Broadcasts ---
+  const { eventEmitter } = require("./controllers/events.controller");
+
+  eventEmitter.on("vpp:netPowerUpdated", (evt: any) => {
+    broadcastVppEvent("vpp:netPowerUpdated", evt);
+  });
+
+  eventEmitter.on("vpp:tradeExecuted", (evt: any) => {
+    broadcastVppEvent("vpp:tradeExecuted", evt);
+  });
+
+  console.log("[WS] WebSocket server initialized and linked to VPP events");
   
   // Start simulation loop (Simulates a hardware bridge like MQTT/Modbus)
   setInterval(simulateNetworkTraffic, 2000);
@@ -60,6 +71,17 @@ export const emitAlert = (alert: any) => {
   const message = JSON.stringify({ type: "alert", data: alert });
   wss.clients.forEach((client: any) => {
     if (client.readyState === 1 && client.organizationId === alert.organizationId) {
+      client.send(message);
+    }
+  });
+};
+
+const broadcastVppEvent = (type: string, data: any) => {
+  if (!wss) return;
+  const message = JSON.stringify({ type, data });
+  wss.clients.forEach((client: any) => {
+    if (client.readyState === 1) { // 1 = OPEN
+      // In MVP, we broadcast to all open nodes. In Prod, filter by organizationId
       client.send(message);
     }
   });

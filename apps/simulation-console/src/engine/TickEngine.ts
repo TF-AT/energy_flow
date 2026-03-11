@@ -21,7 +21,7 @@ export class TickEngine {
   private microgridId: string;
   
   // Simulation Time mapping (e.g. 1 tick = 15 minutes of simulated time)
-  private currentVirtualHour: number = 0; // 0.0 to 23.99
+  private currentVirtualHour: number = 10; // Start at 10 AM for daylight data
 
   constructor(apiUrl: string, apiToken: string, microgridId: string) {
     this.apiUrl = apiUrl;
@@ -61,6 +61,7 @@ export class TickEngine {
       // 2. Calculate Solar
       if (node.hasSolar) {
         const currentGen = EnergyProfile.generateSolar(this.currentVirtualHour, node.solarCapacityKw);
+        console.log(`[Simulator:Node] ${node.id.substring(0,8)} | Hour ${this.currentVirtualHour} | Solar: ${currentGen.toFixed(2)}kW`);
         const genEvt = GenerationEventSchema.parse({
            nodeId: node.id,
            source: "SOLAR",

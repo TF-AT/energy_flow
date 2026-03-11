@@ -12,12 +12,15 @@ export class PeerToPeerTradingService {
    * Initialize event listeners for the matchmaking engine
    */
   static init() {
+    console.log("[P2PTrading] Initializing matchmaking engine...");
     eventEmitter.on("vpp:energySurplus", (evt: NodeEnergySurplusEvent) => {
+      console.log(`[P2PTrading] Order Book: Added Surplus from ${evt.nodeId} (${evt.surplusKw}kW)`);
       surplusOrders.push(evt);
       this.matchOrders();
     });
 
     eventEmitter.on("vpp:energyDeficit", (evt: NodeEnergyDeficitEvent) => {
+      console.log(`[P2PTrading] Order Book: Added Deficit from ${evt.nodeId} (${evt.deficitKw}kW)`);
       deficitOrders.push(evt);
       this.matchOrders();
     });
@@ -31,10 +34,9 @@ export class PeerToPeerTradingService {
     deficitOrders.sort((a, b) => b.maxPrice - a.maxPrice);
 
     let matchMade = false;
-    let i = 0;
-    while (i < surplusOrders.length && j < deficitOrders.length) {
-      const surplus = surplusOrders[i];
-      const deficit = deficitOrders[j];
+    while (surplusOrders.length > 0 && deficitOrders.length > 0) {
+      const surplus = surplusOrders[0];
+      const deficit = deficitOrders[0];
 
       if (!surplus || !deficit) break;
 
@@ -64,15 +66,57 @@ export class PeerToPeerTradingService {
 
         matchMade = true;
 
-        if (surplus.surplusKw <= 0) surplusOrders.splice(i, 1);
-        else j++;
-
-        if (deficit.deficitKw <= 0) deficitOrders.splice(j, 1);
+        if (surplus.surplusKw <= 0) surplusOrders.shift();
+        if (deficit.deficitKw <= 0) deficitOrders.shift();
       } else {
         // Not a match (price mismatch or different microgrid)
-        // For simplicity, we just skip. In reality, a more complex queue is needed
+        // For matching algorithm: if the best surplus/deficit don't match, 
+        // they fall back to the grid.
         break;
       }
+    }
+
+    // Grid Fallback Logic: Clear remaining orders against the Utility Grid
+    if (surplusOrders.length > 0) {
+      for (const surplus of surplusOrders) {
+        if (surplus.surplusKw > 0) {
+          const gridNode = await prisma.energyNode.findFirst({
+            where: { microgridId: surplus.microgridId, name: "Main Utility Connection" }
+          });
+
+          if (gridNode) {
+            await this.executeTrade({
+              sellerNodeId: surplus.nodeId,
+              buyerNodeId: gridNode.id,
+              amountKw: surplus.surplusKw,
+              price: 0.08,
+              microgridId: surplus.microgridId,
+            });
+          }
+        }
+      }
+      surplusOrders.length = 0;
+    }
+
+    if (deficitOrders.length > 0) {
+      for (const deficit of deficitOrders) {
+        if (deficit.deficitKw > 0) {
+          const gridNode = await prisma.energyNode.findFirst({
+            where: { microgridId: deficit.microgridId, name: "Main Utility Connection" }
+          });
+
+          if (gridNode) {
+            await this.executeTrade({
+              sellerNodeId: gridNode.id,
+              buyerNodeId: deficit.nodeId,
+              amountKw: deficit.deficitKw,
+              price: 0.25,
+              microgridId: deficit.microgridId,
+            });
+          }
+        }
+      }
+      deficitOrders.length = 0;
     }
 
     if (matchMade) {
@@ -118,4 +162,4 @@ export class PeerToPeerTradingService {
 }
 
 // Global initialization
-let j = 0; // Fixes scoping issue and keeps loop simple for exact logic above
+// End of PeerToPeerTradingService

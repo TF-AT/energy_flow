@@ -56,6 +56,10 @@ export function useReadingsSocket() {
             telemetryBuffer.current.push(payload.data);
           } else if (payload.type === "alert") {
             alertsBuffer.current.push(payload.data);
+          } else if (payload.type === "vpp:netPowerUpdated") {
+            import("../store/vppStore").then(m => m.useVppStore.getState().updateNodeState(payload.data));
+          } else if (payload.type === "vpp:tradeExecuted") {
+            import("../store/vppStore").then(m => m.useVppStore.getState().addTrade(payload.data));
           }
         } catch (error) {
           console.error("[WS] Failed to parse message:", error);
