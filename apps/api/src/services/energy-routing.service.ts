@@ -10,6 +10,37 @@ import prisma from "../lib/prisma";
 
 export class EnergyRoutingService {
   /**
+   * Initialize reactive listeners for net power updates
+   */
+  static init() {
+    eventEmitter.on("vpp:netPowerUpdated", (evt: NodeNetPowerUpdatedEvent) => {
+      this.handleNetPowerUpdate(evt);
+    });
+  }
+
+  private static handleNetPowerUpdate(evt: NodeNetPowerUpdatedEvent) {
+    if (evt.isSurplus) {
+      const surplusEvt: NodeEnergySurplusEvent = {
+        nodeId: evt.nodeId,
+        microgridId: evt.microgridId,
+        surplusKw: evt.netPowerKw,
+        pricePreference: 0.15,
+        timestamp: evt.timestamp
+      };
+      eventEmitter.emit("vpp:energySurplus", surplusEvt);
+    } else {
+      const deficitEvt: NodeEnergyDeficitEvent = {
+        nodeId: evt.nodeId,
+        microgridId: evt.microgridId,
+        deficitKw: evt.netPowerKw,
+        maxPrice: 0.30,
+        timestamp: evt.timestamp
+      };
+      eventEmitter.emit("vpp:energyDeficit", deficitEvt);
+    }
+  }
+
+  /**
    * Called periodically or reactively when telemetry updates node state
    * Calculates net power (Generation - Consumption) per node
    */

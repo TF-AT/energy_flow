@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { MaintenanceService } from "./services/maintenance.service";
 import { ReadingService } from "./services/reading.service";
 import { DeviceGateway } from "./services/gateway.service";
+import { EnergyRoutingService } from "./services/energy-routing.service";
 import { PeerToPeerTradingService } from "./services/p2p-trading.service";
 import { errorHandler } from "./middleware/error.middleware";
 import * as eventsController from "./controllers/events.controller";
@@ -38,6 +39,8 @@ const startServices = async () => {
     console.log("[App] Initializing background services...");
     // Initialize persistence listeners
     ReadingService.init();
+    // Initialize Routing Engine listeners
+    EnergyRoutingService.init();
     // Initialize Device Gateway (IoT layer)
     await DeviceGateway.init();
     // Initialize P2P Trading Engine

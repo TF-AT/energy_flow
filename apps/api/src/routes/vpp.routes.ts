@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { verifyToken } from "../middleware/auth.middleware";
 import * as vppController from "../controllers/vpp.controller";
+import { handleTelemetryBatch } from "../controllers/telemetry-batch.controller";
 
 const router = Router();
 
@@ -14,7 +15,9 @@ router.get("/microgrids", vppController.getMicrogrids);
 router.post("/nodes", vppController.createNode);
 router.get("/nodes/:id", vppController.getNodeDetails);
 
-// Settlement Routes
 router.get("/microgrids/:microgridId/settlements", vppController.getSettlements);
+
+// Telemetry Ingestion (Simulator)
+router.post("/telemetry/batch", handleTelemetryBatch);
 
 export default router;
