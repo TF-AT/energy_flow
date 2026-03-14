@@ -7,6 +7,8 @@ import {
 import axios from "axios";
 import { randomUUID } from "crypto";
 
+const ENGINE_URL = process.env.ENERGY_ENGINE_URL ?? "http://localhost:8000";
+
 export interface SimulatedNode {
   id: string;
   hasSolar: boolean;
@@ -22,6 +24,7 @@ export class TickEngine {
   
   // Simulation Time mapping (e.g. 1 tick = 15 minutes of simulated time)
   private currentVirtualHour: number = 10; // Start at 10 AM for daylight data
+  private engineAvailable: boolean | null = null; // null = not yet tested
 
   constructor(apiUrl: string, apiToken: string, microgridId: string) {
     this.apiUrl = apiUrl;
@@ -34,7 +37,8 @@ export class TickEngine {
   }
 
   /**
-   * Advances the simulation by 1 tick (Default: 15 virtual minutes)
+   * Advances the simulation by 1 tick (Default: 15 virtual minutes).
+   * Delegates to the Python energy engine when available.
    */
   async tick() {
     this.currentVirtualHour += 0.25; 
@@ -43,13 +47,69 @@ export class TickEngine {
       console.log(`[Simulator] 🌅 A new virtual day begins.`);
     }
 
+    // ── Python Engine Path ────────────────────────────────────────────
+    try {
+      if (this.engineAvailable !== false) {
+        const engineRes = await axios.post(
+          `${ENGINE_URL}/simulate/tick`,
+          {
+            microgrid_id: this.microgridId,
+            nodes: this.nodes.map(n => ({
+              node_id: n.id,
+              has_solar: n.hasSolar,
+              base_load_kw: n.baseLoadKw,
+              solar_capacity_kw: n.solarCapacityKw,
+              current_virtual_hour: this.currentVirtualHour,
+            })),
+          },
+          { timeout: 5000 }
+        );
+
+        this.engineAvailable = true;
+        const tickData = engineRes.data;
+
+        const generationEvents: any[] = [];
+        const consumptionEvents: any[] = [];
+        const virtualISOTime = new Date().toISOString();
+
+        for (const nodeResult of tickData.nodes) {
+          const conEvt = ConsumptionEventSchema.parse({
+            nodeId: nodeResult.node_id,
+            kwConsumed: nodeResult.load_kw,
+            timestamp: virtualISOTime,
+          });
+          consumptionEvents.push(conEvt);
+
+          if (nodeResult.solar_kw > 0) {
+            const genEvt = GenerationEventSchema.parse({
+              nodeId: nodeResult.node_id,
+              source: "SOLAR",
+              kwProduced: nodeResult.solar_kw,
+              timestamp: virtualISOTime,
+            });
+            generationEvents.push(genEvt);
+          }
+        }
+
+        await this._pushBatch(generationEvents, consumptionEvents, virtualISOTime);
+        const hh = Math.floor(this.currentVirtualHour).toString().padStart(2, "0");
+        const mm = ((this.currentVirtualHour % 1) * 60).toString().padStart(2, "0");
+        console.log(`[Simulator:Python ${hh}:${mm}] 🐍 Tick via energy engine (${this.nodes.length} nodes, grid net: ${tickData.grid_net_kw.toFixed(2)}kW)`);
+        return;
+      }
+    } catch (err: any) {
+      if (this.engineAvailable !== false) {
+        console.warn(`[Simulator] Python energy engine unavailable (${err.message}). Using local calculations.`);
+        this.engineAvailable = false;
+      }
+    }
+
+    // ── Fallback: Local TypeScript calculations ───────────────────────
     const generationEvents: any[] = [];
     const consumptionEvents: any[] = [];
-
-    const virtualISOTime = new Date().toISOString(); // We use real time for the DB MVP, but profiles are based on virtual hour
+    const virtualISOTime = new Date().toISOString();
 
     for (const node of this.nodes) {
-      // 1. Calculate Load
       const currentLoad = EnergyProfile.generateLoad(this.currentVirtualHour, node.baseLoadKw);
       const conEvt = ConsumptionEventSchema.parse({
          nodeId: node.id,
@@ -58,10 +118,8 @@ export class TickEngine {
       });
       consumptionEvents.push(conEvt);
 
-      // 2. Calculate Solar
       if (node.hasSolar) {
         const currentGen = EnergyProfile.generateSolar(this.currentVirtualHour, node.solarCapacityKw);
-        console.log(`[Simulator:Node] ${node.id.substring(0,8)} | Hour ${this.currentVirtualHour} | Solar: ${currentGen.toFixed(2)}kW`);
         const genEvt = GenerationEventSchema.parse({
            nodeId: node.id,
            source: "SOLAR",
@@ -72,23 +130,25 @@ export class TickEngine {
       }
     }
 
-    // 3. Construct Batch Event
+    await this._pushBatch(generationEvents, consumptionEvents, virtualISOTime);
+    const hh = Math.floor(this.currentVirtualHour).toString().padStart(2, "0");
+    const mm = ((this.currentVirtualHour % 1) * 60).toString().padStart(2, "0");
+    console.log(`[Simulator:Local ${hh}:${mm}] Pushed batch to API (${this.nodes.length} nodes)`);
+  }
+
+  private async _pushBatch(generationEvents: any[], consumptionEvents: any[], timestamp: string) {
     const batch = TelemetryBatchEventSchema.parse({
       batchId: randomUUID(),
       microgridId: this.microgridId,
-      timestamp: virtualISOTime,
+      timestamp,
       generation: generationEvents,
-      consumption: consumptionEvents
+      consumption: consumptionEvents,
     });
 
-    // 4. Push to API
     try {
       await axios.post(`${this.apiUrl}/vpp/telemetry/batch`, batch, {
-        headers: { Authorization: `Bearer ${this.apiToken}` }
+        headers: { Authorization: `Bearer ${this.apiToken}` },
       });
-      const hh = Math.floor(this.currentVirtualHour).toString().padStart(2, '0');
-      const mm = ((this.currentVirtualHour % 1) * 60).toString().padStart(2, '0');
-      console.log(`[Simulator ${hh}:${mm}] Pushed batch to API (${this.nodes.length} nodes)`);
     } catch (error: any) {
       console.error(`[Simulator] Failed to push batch to API: ${error.message}`);
     }
@@ -96,8 +156,8 @@ export class TickEngine {
 
   start(tickIntervalMs: number) {
     console.log(`[Simulator] Starting engine at ${tickIntervalMs}ms/tick...`);
-    // Run first tick immediately
     this.tick();
     setInterval(() => this.tick(), tickIntervalMs);
   }
 }
+

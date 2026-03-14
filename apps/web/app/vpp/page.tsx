@@ -14,12 +14,8 @@ export default function VppDashboardPage() {
   useEffect(() => {
     const fetchMicrogrids = async () => {
       try {
-        const token = localStorage.getItem("auth_token");
-        const res = await fetch("http://localhost:3001/api/vpp/microgrids", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        setMicrogrids(data.data || []);
+        const data = await api.getVppMicrogrids();
+        setMicrogrids(data || []);
       } catch (error) {
         console.error("Failed to load microgrids:", error);
       } finally {

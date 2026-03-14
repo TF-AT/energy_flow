@@ -37,7 +37,89 @@ export class VppTopologyService {
     baseLoadKw?: number;
     batteryCapacityKwh?: number;
   }) {
-    return prisma.energyNode.create({ data });
+    // 1. Ensure we have a unique siteId for this node
+    let siteId = data.siteId;
+    if (!siteId) {
+       const mg = await prisma.microgrid.findUnique({
+         where: { id: data.microgridId },
+         select: { organizationId: true }
+       });
+       
+       if (mg) {
+         // Create a unique virtual site for this node to satisfy @unique constraint
+         const newSite = await prisma.site.create({
+           data: {
+             organizationId: mg.organizationId,
+             name: `${data.name} Site`,
+             location: "Distributed",
+             capacity_kw: 1000,
+           }
+         });
+         siteId = newSite.id;
+       }
+    }
+
+    const node = await prisma.energyNode.create({ 
+      data: { ...data, siteId } 
+    });
+
+    // Auto-provision related components for simulation/tracking
+    if (data.hasSolar) {
+      const solarGen = await prisma.solarGenerator.create({
+        data: {
+          id: `solar-${node.id}`,
+          name: `${data.name} Solar`,
+          location: "VPP-Calculated",
+          siteId: siteId as string,
+        }
+      });
+      await prisma.energyProducer.create({
+        data: {
+          nodeId: node.id,
+          solarGeneratorId: solarGen.id,
+          type: "SOLAR",
+          capacity_kw: data.maxGenerationKw || 5.0
+        }
+      });
+      // Also register as a Device for telemetry pipeline
+      await prisma.device.create({
+        data: {
+          id: solarGen.id,
+          siteId: siteId as string,
+          type: "solar",
+          protocol: "WEBHOOK"
+        }
+      });
+    }
+
+    if (data.type === "HOUSE" || data.type === "CONSUMER" || data.baseLoadKw) {
+      const load = await prisma.energyLoad.create({
+        data: {
+          id: `load-${node.id}`,
+          name: `${data.name} Load`,
+          location: "VPP-Calculated",
+          siteId: siteId as string,
+        }
+      });
+      await prisma.energyConsumer.create({
+        data: {
+          nodeId: node.id,
+          energyLoadId: load.id,
+          type: "BUILDING_BASE_LOAD",
+          maxDemand_kw: data.baseLoadKw || 10.0
+        }
+      });
+      await prisma.device.create({
+        data: {
+          id: load.id,
+          siteId: siteId as string,
+          type: "load",
+          protocol: "WEBHOOK"
+        }
+      });
+    }
+
+    return node;
   }
 
   static async getNode(nodeId: string) {

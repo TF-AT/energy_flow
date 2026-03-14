@@ -60,6 +60,44 @@ export class ReadingService {
 
       // Evaluate dynamic rules
       await AlertRuleService.evaluate(event, device.site.organizationId, deviceId);
+
+      // Trigger VPP Node evaluation if applicable
+      await this.triggerVppEvaluation(deviceId, deviceType);
+    }
+  }
+
+  private static async triggerVppEvaluation(deviceId: string, deviceType: string) {
+    try {
+      let nodeId: string | null = null;
+      let microgridId: string | null = null;
+
+      if (deviceType === "solar") {
+        const producer = await prisma.energyProducer.findUnique({
+          where: { solarGeneratorId: deviceId },
+          include: { node: { select: { id: true, microgridId: true } } }
+        });
+        if (producer) {
+          nodeId = producer.node.id;
+          microgridId = producer.node.microgridId;
+        }
+      } else if (deviceType === "load") {
+        const consumer = await prisma.energyConsumer.findUnique({
+          where: { energyLoadId: deviceId },
+          include: { node: { select: { id: true, microgridId: true } } }
+        });
+        if (consumer) {
+          nodeId = consumer.node.id;
+          microgridId = consumer.node.microgridId;
+        }
+      }
+
+      if (nodeId && microgridId) {
+        const { EnergyRoutingService } = require("./energy-routing.service");
+        // No await required - non-blocking for ingestion pipeline
+        EnergyRoutingService.evaluateNodeNetPower(nodeId, microgridId);
+      }
+    } catch (error) {
+       // Silent fail for vpp trigger
     }
   }
 

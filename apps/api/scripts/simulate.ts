@@ -19,7 +19,7 @@ async function login() {
       email: "admin@energyflow.com",
       password: "password123",
     });
-    authToken = response.data.token;
+    authToken = response.data.data.token;
     console.log("Simulator authenticated successfully.");
   } catch (error: any) {
     console.error("Simulator authentication failed:", error.response?.data?.error || error.message);

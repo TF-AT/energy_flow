@@ -6,6 +6,7 @@ import infrastructureRoutes from "./infrastructure.routes";
 import analyticsRoutes from "./analytics.routes";
 import alertRuleRoutes from "./alert-rule.routes";
 import vppRoutes from "./vpp.routes";
+import engineRoutes from "./engine.routes";
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use("/", infrastructureRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/alerts/rules", alertRuleRoutes);
 router.use("/vpp", vppRoutes);
+router.use("/engine", engineRoutes);
 
 export default router;

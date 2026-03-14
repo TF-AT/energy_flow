@@ -2,6 +2,7 @@ import { eventEmitter } from "../controllers/events.controller";
 import { NodeEnergySurplusEvent, NodeEnergyDeficitEvent } from "../types/vpp.types";
 import { TradeExecutedEventSchema } from "@energy/event-schema";
 import prisma from "../lib/prisma";
+import { energyEngine } from "../lib/energy-engine.client";
 
 // Simple in-memory order book for MVP
 const surplusOrders: NodeEnergySurplusEvent[] = [];
@@ -29,7 +30,91 @@ export class PeerToPeerTradingService {
   private static async matchOrders() {
     if (surplusOrders.length === 0 || deficitOrders.length === 0) return;
 
-    // Simple matching: Sort surplus by lowest price, deficit by highest willing
+    // Gather current orders — all must be in the same microgrid for one LP solve
+    const microgridId = surplusOrders[0]?.microgridId ?? deficitOrders[0]?.microgridId;
+    if (!microgridId) return; // guard: should never happen given checks above
+
+    // ── Python Engine Path (CVXPY Linear Program) ──────────────────
+    try {
+      const engineHealthy = await energyEngine.isHealthy();
+      if (engineHealthy) {
+        const nodes = [
+          ...surplusOrders
+            .filter(s => s.microgridId === microgridId)
+            .map(s => ({
+              node_id: s.nodeId,
+              surplus_kw: s.surplusKw,
+              deficit_kw: 0,
+              min_price: s.pricePreference,
+              max_price: s.pricePreference,
+            })),
+          ...deficitOrders
+            .filter(d => d.microgridId === microgridId)
+            .map(d => ({
+              node_id: d.nodeId,
+              surplus_kw: 0,
+              deficit_kw: d.deficitKw,
+              min_price: d.maxPrice,
+              max_price: d.maxPrice,
+            })),
+        ];
+
+        const result = await energyEngine.optimizeP2PTrades(microgridId, nodes);
+        console.log(
+          `[P2PTrading][Python] Optimizer solved (${result.summary.solver_status}). ` +
+          `P2P ratio: ${result.summary.p2p_ratio_pct.toFixed(1)}% | ` +
+          `Peer traded: ${result.summary.total_peer_traded_kw.toFixed(2)} kW`
+        );
+
+        // Execute every trade the optimizer resolved
+        for (const trade of result.trades) {
+          if (trade.type === "P2P") {
+            await this.executeTrade({
+              sellerNodeId: trade.seller_node_id,
+              buyerNodeId: trade.buyer_node_id,
+              amountKw: trade.amount_kw,
+              price: trade.price_per_kwh,
+              microgridId,
+            });
+          } else if (trade.type === "GRID_IMPORT") {
+            const gridNode = await prisma.energyNode.findFirst({
+              where: { microgridId, name: "Main Utility Connection" },
+            });
+            if (gridNode) {
+              await this.executeTrade({
+                sellerNodeId: gridNode.id,
+                buyerNodeId: trade.buyer_node_id,
+                amountKw: trade.amount_kw,
+                price: trade.price_per_kwh,
+                microgridId,
+              });
+            }
+          } else if (trade.type === "GRID_EXPORT") {
+            const gridNode = await prisma.energyNode.findFirst({
+              where: { microgridId, name: "Main Utility Connection" },
+            });
+            if (gridNode) {
+              await this.executeTrade({
+                sellerNodeId: trade.seller_node_id,
+                buyerNodeId: gridNode.id,
+                amountKw: trade.amount_kw,
+                price: trade.price_per_kwh,
+                microgridId,
+              });
+            }
+          }
+        }
+
+        // Clear all processed orders
+        surplusOrders.length = 0;
+        deficitOrders.length = 0;
+        return;
+      }
+    } catch (err: any) {
+      console.warn(`[P2PTrading] Python engine unavailable (${err.message}). Falling back to order-book.`);
+    }
+
+    // ── Fallback: original TypeScript order-book matching ──────────
     surplusOrders.sort((a, b) => a.pricePreference - b.pricePreference);
     deficitOrders.sort((a, b) => b.maxPrice - a.maxPrice);
 
@@ -40,22 +125,16 @@ export class PeerToPeerTradingService {
 
       if (!surplus || !deficit) break;
 
-      // Match found if price overlaps and they are in the same microgrid
       if (
         surplus.microgridId === deficit.microgridId &&
         deficit.maxPrice >= surplus.pricePreference
       ) {
-        // Find clearing price (avg)
         const clearingPrice = (deficit.maxPrice + surplus.pricePreference) / 2;
-        
-        // Find traded amount (min of surplus/deficit)
         const amountKw = Math.min(surplus.surplusKw, deficit.deficitKw);
 
-        // Deduct from amounts
         surplus.surplusKw -= amountKw;
         deficit.deficitKw -= amountKw;
 
-        // Execute trade
         await this.executeTrade({
           sellerNodeId: surplus.nodeId,
           buyerNodeId: deficit.nodeId,
@@ -69,21 +148,17 @@ export class PeerToPeerTradingService {
         if (surplus.surplusKw <= 0) surplusOrders.shift();
         if (deficit.deficitKw <= 0) deficitOrders.shift();
       } else {
-        // Not a match (price mismatch or different microgrid)
-        // For matching algorithm: if the best surplus/deficit don't match, 
-        // they fall back to the grid.
         break;
       }
     }
 
-    // Grid Fallback Logic: Clear remaining orders against the Utility Grid
+    // Grid Fallback for remaining orders
     if (surplusOrders.length > 0) {
       for (const surplus of surplusOrders) {
         if (surplus.surplusKw > 0) {
           const gridNode = await prisma.energyNode.findFirst({
             where: { microgridId: surplus.microgridId, name: "Main Utility Connection" }
           });
-
           if (gridNode) {
             await this.executeTrade({
               sellerNodeId: surplus.nodeId,
@@ -104,7 +179,6 @@ export class PeerToPeerTradingService {
           const gridNode = await prisma.energyNode.findFirst({
             where: { microgridId: deficit.microgridId, name: "Main Utility Connection" }
           });
-
           if (gridNode) {
             await this.executeTrade({
               sellerNodeId: gridNode.id,
@@ -120,7 +194,7 @@ export class PeerToPeerTradingService {
     }
 
     if (matchMade) {
-      console.log(`[P2PTrading] Successfully matched orders.`);
+      console.log(`[P2PTrading][Fallback] Successfully matched orders.`);
     }
   }
 

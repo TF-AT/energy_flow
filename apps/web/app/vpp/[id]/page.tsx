@@ -21,12 +21,8 @@ export default function MicrogridDetail({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     const fetchTopology = async () => {
       try {
-        const token = localStorage.getItem("auth_token");
-        const mgRes = await fetch(`http://localhost:3001/api/vpp/microgrids`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const mgData = await mgRes.json();
-        const specificMg = mgData.data.find((m: any) => m.id === id);
+        const mgData = await api.getVppMicrogrids();
+        const specificMg = mgData.find((m: any) => m.id === id);
         setMicrogrid(specificMg);
       } catch (error) {
         console.error("Failed to fetch microgrid details", error);

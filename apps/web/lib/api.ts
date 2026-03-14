@@ -126,4 +126,8 @@ export const api = {
     method: "PUT",
     body: JSON.stringify(data),
   }),
+
+  // VPP Routes
+  getVppMicrogrids: () => fetcher<any[]>("/api/vpp/microgrids"),
+  getVppNode: (id: string) => fetcher<any>(`/api/vpp/nodes/${id}`),
 };
